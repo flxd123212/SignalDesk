@@ -1,0 +1,33 @@
+.discovery-dialog { width: min(580px, calc(100vw - 24px)); max-height: calc(100dvh - 40px); padding: 0; color: #d8e0e8; background: #20252b; border: 1px solid #46515e; border-radius: 7px; box-shadow: 0 25px 90px #0009; }
+.discovery-dialog[open] { display: flex; flex-direction: column; }
+.discovery-dialog::backdrop { background: #080b10a6; backdrop-filter: blur(3px); }
+.discovery-dialog > header { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 0 18px; border-bottom: 1px solid #39434f; flex: none; }
+.discovery-dialog h2 { margin: 0; font-size: 16px; font-weight: 550; }
+.discovery-dialog header > span { margin-left: auto; color: #96a7b8; font-size: 12px; }
+.discovery-body { overflow: auto; padding: 16px 22px; }
+.discovery-toolbar { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: #a8b8c8; margin-bottom: 10px; }
+.discovery-port-list { display: flex; flex-direction: column; max-height: 180px; overflow: auto; gap: 5px; }
+.discovery-port-list > button { width: 100%; min-height: 58px; flex: none; padding: 10px 12px; border: 1px solid #3b4551; border-radius: 4px; text-align: left; justify-content: flex-start; gap: 12px; }
+.discovery-port-list > button[aria-selected=true] { border-color: var(--accent); background: #2b3a3e; }
+.discovery-port-list button > span { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.discovery-port-list strong { font: 13px var(--mono); }
+.discovery-port-list small, .discovery-port-list em { font-size: 11px; color: #9baec0; font-style: normal; overflow-wrap: anywhere; }
+.discovery-identity { display: grid; grid-template-columns: 105px minmax(0, 1fr); gap: 12px; font-size: 12px; border-bottom: 1px solid #36414c; padding: 18px 0; margin: 0 0 18px; }
+.discovery-identity dt { color: #97a7b9; }
+.discovery-identity dd { margin: 0; overflow-wrap: anywhere; }
+.discovery-identity dd small { display: block; color: #93a1ae; font-size: 11px; margin-top: 4px; }
+.discovery-body > .field { margin-bottom: 14px; }
+.discovery-project { overflow-wrap: anywhere; color: #9fb0c3; font: 11px var(--mono); }
+.discovery-error { color: #edb58e; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.discovery-empty { text-align: center; padding: 30px 18px; color: #9aabba; }
+.discovery-empty h3 { font-size: 14px; color: #cfdae4; }
+.discovery-empty p { font-size: 12px; line-height: 1.8; }
+.discovery-preference { margin-top: 20px; font-size: 12px; }
+.discovery-dialog > footer { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; padding: 13px 18px; border-top: 1px solid #39434f; flex: none; }
+.discovery-dialog footer > div { display: flex; gap: 9px; }
+.discovery-dialog footer button { min-height: 34px; font-size: 12px; padding: 0 12px; }
+.discovery-open { justify-content: flex-start; width: 100%; margin: 4px 0 12px; }
+.discovery-open > span { margin-left: auto; color: #96b4c4; }
+.discover-header { position: relative; }
+.discover-header > small { position: absolute; top: -1px; right: -1px; border-radius: 8px; font-size: 9px; background: #42695f; color: #d7f3e9; min-width: 12px; }
+@media (max-width: 600px) { .discovery-body { padding: 14px; } .discovery-dialog > footer { padding: 12px; } }

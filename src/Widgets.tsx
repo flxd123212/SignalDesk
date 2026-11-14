@@ -1,0 +1,39 @@
+import { lazy, Suspense, useEffect, useRef, useState } from 'react';
+import { Download, Play, Save, Send, Square, RotateCcw } from 'lucide-react';
+import { api, download } from './data';
+import { Field } from './ui';
+import { widgetTemplates } from '../shared/widget-templates.mjs';
+import type { AppState } from './types';
+const Editor = lazy(() => import('./Editor').then(module => ({ default: module.Editor })));
+type View = { kind: string; title: string; value: number; unit: string; color: string; min: number; max: number; series: number[] };
+
+function WidgetView({ view }: { view: View | null }) {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => { const el = canvas.current; if (!el || !view) return; const context = el.getContext('2d'); if (!context) return; const width = el.width = 800, height = el.height = 240; context.clearRect(0, 0, width, height); const points = view.series; if (!points.length) return; const min = Math.min(...points), span = Math.max(...points) - min || 1; context.strokeStyle = view.color; context.lineWidth = 2; context.beginPath(); points.forEach((value, i) => { const x = i / Math.max(1, points.length - 1) * width, y = height - 10 - (value - min) / span * (height - 20); if (i) context.lineTo(x, y); else context.moveTo(x, y); }); context.stroke(); }, [view]);
+  if (!view) return <div className="empty-state">暂无预览</div>;
+  return <div className="widget-render" style={{ '--widget-color': view.color } as React.CSSProperties}><h3>{view.title}</h3><strong>{view.value.toFixed(3)} <small>{view.unit}</small></strong>{view.kind === 'bar' && <progress max="1" value={Math.max(0, Math.min(1, (view.value - view.min) / (view.max - view.min)))} />}{view.kind === 'indicator' && <span className={`widget-indicator ${view.value ? 'on' : ''}`} />}{view.kind === 'chart' && <canvas ref={canvas} aria-label="控件历史曲线" />}{view.kind === 'button' && <span className="muted">输出值 {view.value}</span>}</div>;
+}
+export function Widgets({ state, notify }: { state: AppState; notify: (message: string, error?: boolean) => void }) {
+  const deviceId = (state as AppState & { activeDevice?: string }).activeDevice;
+  const key = `signaldesk.widget.${deviceId}`;
+  const [code, setCode] = useState(() => { try { return localStorage.getItem(key) || widgetTemplates.number.code; } catch { return widgetTemplates.number.code; } });
+  const [template, setTemplate] = useState('number'), [running, setRunning] = useState(false), [view, setView] = useState<View | null>(null), [error, setError] = useState(''), [channel, setChannel] = useState(0), [inputMode, setInputMode] = useState('live'), [testValue, setTestValue] = useState(25), [unit, setUnit] = useState('V'), [color, setColor] = useState('#75beff'), [allowSend, setAllowSend] = useState(false), [command, setCommand] = useState('SET {value}'), [sending, setSending] = useState(false);
+  const current = useRef({ code, inputs: state.latest, inputMode, testValue, channel, unit, color }); current.current = { code, inputs: state.latest, inputMode, testValue, channel, unit, color };
+  const memory = useRef({}), inFlight = useRef(false), revision = useRef(0), alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; revision.current++; }; }, []);
+  const reset = () => { revision.current++; memory.current = {}; setView(null); setError(''); };
+  const evaluate = async () => {
+    if (inFlight.current) return; const input = current.current, version = revision.current;
+    const first = input.inputMode === 'test' ? input.testValue : input.inputs[input.channel];
+    if (!Number.isFinite(first)) { setError('选中通道暂无有效数据'); return; }
+    inFlight.current = true;
+    try { const result = await api<{ view: View; state: object }>('/widgets/evaluate', { code: input.code, inputs: [first, ...input.inputs.filter((_, index) => index !== input.channel)].slice(0, 16), settings: { unit: input.unit, color: input.color }, state: memory.current }); if (alive.current && version === revision.current) { memory.current = result.state; setView(result.view); setError(''); } }
+    catch (failure) { if (alive.current && version === revision.current) { setError((failure as Error).message); setRunning(false); } }
+    finally { inFlight.current = false; }
+  };
+  useEffect(() => { if (!running) return; void evaluate(); const timer = setInterval(() => void evaluate(), 200); return () => clearInterval(timer); }, [running]);
+  const changeCode = (value: string) => { setCode(value); reset(); setAllowSend(false); };
+  const payload = command.replaceAll('{value}', String(view?.value ?? 0));
+  const send = async () => { if (!allowSend || !view || !state.connected || sending) return; setSending(true); try { await api('/send', { deviceId, text: payload, format: 'text', ending: 'crlf', checksum: 'none', encoding: 'utf8' }); notify('控件指令已发送'); } catch (failure) { notify((failure as Error).message, true); } finally { setSending(false); } };
+  return <section className="instrument-workspace"><div className="instrument-toolbar"><Field label="控件模板"><select aria-label="控件模板" value={template} onChange={event => { if (code !== widgetTemplates[template as keyof typeof widgetTemplates].code && !confirm('替换当前控件代码？')) return; setTemplate(event.target.value); changeCode(widgetTemplates[event.target.value as keyof typeof widgetTemplates].code); }}>{Object.entries(widgetTemplates).map(([id, entry]) => <option key={id} value={id}>{entry.name}</option>)}</select></Field><button onClick={() => { try { localStorage.setItem(key, code); notify('控件已保存到当前设备'); } catch { notify('本地保存失败，请导出控件', true); } }}><Save size={15} />保存</button><button onClick={() => download('signaldesk-widget.js', code)}><Download size={15} />导出 JS</button><button onClick={() => void evaluate()}><Play size={15} />运行一次</button><button onClick={() => setRunning(!running)}>{running ? <Square size={15} /> : <Play size={15} />}{running ? '停止预览' : '实时预览'}</button><button title="清空控件状态" aria-label="清空控件状态" onClick={reset}><RotateCcw size={15} /></button></div><div className="widget-layout"><div className="widget-editor"><Suspense fallback={<span>加载编辑器</span>}><Editor value={code} onChange={changeCode} /></Suspense></div><div className="widget-preview"><div className="instrument-toolbar"><Field label="输入源"><select aria-label="控件输入源" value={inputMode} onChange={event => { setInputMode(event.target.value); reset(); }}><option value="live">设备数据</option><option value="test">测试值</option></select></Field>{inputMode === 'live' ? <Field label="输入通道"><select value={channel} onChange={event => { setChannel(Number(event.target.value)); reset(); }}>{Array.from({ length: Math.max(1, state.names.length) }, (_, i) => <option key={i} value={i}>{state.names[i] || `CH${i + 1}`}</option>)}</select></Field> : <Field label="测试值"><input aria-label="控件测试值" type="number" value={testValue} onChange={event => setTestValue(Number(event.target.value))} /></Field>}</div><WidgetView view={view} /><div className="instrument-toolbar"><Field label="单位"><input value={unit} maxLength={20} onChange={event => setUnit(event.target.value)} /></Field><Field label="颜色"><input type="color" value={color} onChange={event => setColor(event.target.value)} /></Field></div>{error && <p role="alert" className="instrument-error">{error}</p>}<div className="widget-output"><label className="checkbox"><input type="checkbox" checked={allowSend} onChange={event => setAllowSend(event.target.checked)} />启用手动发送到当前设备</label><Field label="指令模板"><input aria-label="控件指令模板" value={command} maxLength={1024} onChange={event => { setCommand(event.target.value); setAllowSend(false); }} /></Field><output>{payload}</output><button disabled={!allowSend || !view || !state.connected || sending} onClick={send}><Send size={15} />发送当前值</button></div></div></div></section>;
+}

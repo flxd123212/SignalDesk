@@ -1,0 +1,171 @@
+@media (max-width: 1250px) {
+  .main-shell { padding: 0 15px; }
+  .connection-sidebar { width: 205px; padding-left: 13px; padding-right: 13px; }
+  .brand { width: 235px; }
+  .metric { padding-left: 11px; padding-right: 11px; }
+  .metric-label > span:last-child:not(.live-label) { display: none; }
+  .metric-value { font-size: 23px; }
+  .metric-value svg { width: 20px; }
+  .wave-body { grid-template-columns: minmax(0, 1fr) 154px; }
+  .measure-panel { padding-left: 11px; padding-right: 11px; }
+  .channel-legend { gap: 5px; padding-left: 12px; }
+  .channel-legend button b { display: none; }
+  .axis-unit { display: none; }
+  .script-inspector { width: 200px; }
+  .node-inspector { width: 175px; }
+}
+@media (max-height: 800px) and (min-width: 901px) {
+  .app-header { height: 52px; }
+  .page-heading { height: 63px; }
+  .workspace-page { grid-template-rows: 73px minmax(240px, 1fr) minmax(110px, .4fr); gap: 10px; }
+  .metric { padding-top: 9px; }
+  .metric-value { font-size: 23px; padding-top: 5px; }
+  .sidebar-heading { margin-bottom: 9px; }
+  .device-indicator { padding: 9px; margin-bottom: 12px; }
+  .sidebar-section { padding-bottom: 11px; margin-bottom: 11px; }
+  .field { margin-bottom: 9px; gap: 5px; }
+  .section-label { margin-bottom: 10px; }
+  .sidebar-bottom { padding-top: 17px; }
+  .sidebar-bottom small { margin-bottom: 10px; }
+  .measure-panel { padding-top: 10px; }
+  .measurement-row { min-height: 22px; }
+  .measurement-list { margin-top: 6px; }
+  .measurement-foot { padding-top: 6px; }
+  .send-bar { padding-top: 8px; padding-bottom: 7px; }
+}
+@media (max-width: 1000px) {
+  .connection-sidebar { width: 190px; }
+  .metric.throughput { display: none; }
+  .metrics-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .brand { width: 225px; }
+  .header-breadcrumb { font-size: 10px; }
+  .session-status { display: none; }
+  .page-actions { gap: 7px; }
+  .wave-body { grid-template-columns: minmax(0, 1fr) 140px; }
+  .measure-panel { padding-left: 9px; padding-right: 9px; }
+  .measurement-row b { font-size: 10px; }
+  .small-tag { display: none; }
+  .footer-version { display: none; }
+  .status-counters { gap: 10px; }
+  .node-inspector { width: 160px; }
+}
+@media (max-width: 900px) {
+  body { overflow: auto; }
+  .app-shell { height: auto; min-height: 100dvh; }
+  .app-header { height: 55px; padding: 0 15px; }
+  .brand { width: auto; }
+  .brand > span:not(.edition) { font-size: 18px; }
+  .header-breadcrumb { display: none; }
+  .app-body { display: grid; grid-template-columns: 48px minmax(0, 1fr); }
+  .navigation { width: 48px; padding-left: 5px; padding-right: 5px; grid-row: 1 / 3; }
+  .navigation > button { height: 39px; }
+  .connection-sidebar { width: auto; display: grid; grid-template-columns: 1fr 1fr; gap: 10px 16px; padding: 12px 15px; border-bottom: 1px solid var(--border); border-right: none; }
+  .sidebar-heading { grid-column: 1 / -1; margin: 0; }
+  .device-indicator { grid-column: 1 / -1; margin: 0; padding: 8px 10px; }
+  .device-indicator > div { display: flex; gap: 12px; align-items: center; }
+  .device-indicator small { margin: 0; }
+  .sidebar-section { border-bottom: none; margin: 0; padding: 0; }
+  .sidebar-section .field { margin-bottom: 8px; }
+  .section-label { display: none; }
+  .connect-button { grid-column: 1 / -1; }
+  .sidebar-bottom { display: none; }
+  .main-shell { padding: 0 12px; min-width: 0; }
+  .page-heading { height: 70px; }
+  .page-content { min-height: 600px; }
+  .workspace-page { grid-template-rows: 76px 340px 185px; }
+  .status-bar { height: 29px; gap: 10px; position: static; }
+  .footer-brand { width: auto; }
+  .status-counters { margin-left: auto; }
+  .status-counters > span:nth-child(3) { display: none; }
+  .graph-page, .script-page, .commands-page, .session-page { min-height: 590px; }
+  .full-terminal { height: 600px; }
+  .instrument-page { height: auto; }
+  .instrument-fields { grid-template-columns: 1fr 1fr; }
+  .send-options { flex-wrap: wrap; gap: 8px; }
+  .frame-preview { flex-wrap: wrap; gap: 10px; }
+  .frame-preview code { font-size: 13px; }
+}
+@media (max-width: 600px) {
+  .header-right { gap: 8px; }
+  .header-divider { display: none; }
+  .brand { gap: 7px; }
+  .edition { display: none; }
+  .header-right .icon-button { width: 24px; }
+  .device-badge { font-size: 9px; }
+  .connection-sidebar { gap: 8px 12px; }
+  .device-indicator small { font-size: 7px; }
+  .page-heading { height: 66px; }
+  h1 { font-size: 17px; }
+  .page-eyebrow { font-size: 8px; }
+  .record-button { font-size: 10px; padding: 0 8px; }
+  .page-actions .quiet-button { width: 27px; overflow: hidden; padding: 0; font-size: 0; gap: 0; }
+  .metric { padding: 10px 8px; }
+  .metric-label { font-size: 8px; gap: 4px; }
+  .metric-value { font-size: 18px; gap: 3px; padding-top: 10px; }
+  .metric-value small { font-size: 9px; }
+  .metric-value svg { display: none; }
+  .metrics-row { gap: 6px; }
+  .workspace-page { grid-template-rows: 73px 375px 190px; gap: 10px; }
+  .wave-body { display: flex; flex-direction: column; }
+  .wave-main { min-height: 235px; flex: 1; }
+  .measure-panel { border-left: none; border-top: 1px solid #303940; padding: 7px 10px; display: grid; grid-template-columns: 65px 1fr; align-items: center; gap: 6px; }
+  .measure-heading, .measurement-foot, .measurement-row:nth-child(n+4) { display: none; }
+  .measure-panel select { font-size: 9px; height: 25px; }
+  .measurement-list { display: flex; gap: 10px; margin: 0; justify-content: space-between; }
+  .measurement-row { flex-direction: column; gap: 3px; font-size: 8px; }
+  .measurement-row b { font-size: 9px; }
+  .panel-toolbar { padding: 0 9px; gap: 5px; }
+  .panel-title { font-size: 10px; gap: 5px; }
+  .live-chip { display: none; }
+  .wave-panel .toolbar-actions { gap: 2px; }
+  .wave-panel .toolbar-actions .toolbar-divider { display: none; }
+  .wave-panel .toolbar-actions select { width: 58px; font-size: 9px; padding-left: 4px; }
+  .wave-panel .toolbar-actions .icon-button { width: 22px; }
+  .wave-panel .toolbar-actions .icon-button:last-child { display: none; }
+  .segmented button { min-width: 30px; font-size: 9px; padding: 0 4px; }
+  .channel-legend { padding: 9px 8px 0; }
+  .channel-legend button { font-size: 8px; }
+  .plot-footer { gap: 10px; font-size: 8px; padding: 0 8px; }
+  .terminal-panel .toolbar-actions { gap: 1px; }
+  .terminal-panel .toolbar-actions .icon-button { width: 22px; }
+  .terminal-panel .toolbar-actions .icon-button:nth-last-child(2) { display: none; }
+  .terminal-log { padding-left: 8px; padding-right: 8px; }
+  .log-line { grid-template-columns: 73px 19px minmax(0, 1fr); gap: 4px; }
+  .log-line time { font-size: 8px; }
+  .log-line pre { font-size: 9px; }
+  .send-mode { width: 66px; }
+  .send-compose { gap: 6px; }
+  .send-mode select { font-size: 9px; padding-left: 6px; }
+  .primary.send-button { width: 58px; gap: 4px; font-size: 10px; padding: 0 5px; }
+  .send-compose textarea { padding-left: 7px; font-size: 11px; }
+  .send-options { gap: 6px; font-size: 9px; }
+  .send-options > label { gap: 4px; }
+  .send-options select { width: 57px; font-size: 9px; }
+  .send-options .toolbar-divider { display: none; }
+  .send-spacer { display: none; }
+  .timed-toggle { order: 5; }
+  .interval-input { order: 6; }
+  .send-options > .muted { order: 7; }
+  .file-send { margin-left: auto; font-size: 9px; }
+  .status-bar { font-size: 8px; padding: 0 8px; gap: 8px; }
+  .status-bar > span:nth-child(2) { display: none; }
+  .status-counters { gap: 12px; }
+  .script-inspector, .node-inspector { display: none; }
+  .graph-page .panel-toolbar { flex-wrap: wrap; height: auto; min-height: 74px; padding: 8px; }
+  .graph-page .toolbar-actions { width: 100%; justify-content: flex-end; }
+  .commands-page .panel-toolbar { flex-wrap: wrap; height: auto; min-height: 72px; padding: 8px; }
+  .commands-page .toolbar-actions { gap: 5px; }
+  .session-list table th:nth-child(2), .session-list table td:nth-child(2) { display: none; }
+  .session-list td { padding: 10px 7px; }
+  .session-list table { table-layout: fixed; }
+  .session-list th:first-child { width: 48%; }
+  .session-name > span:last-child { font-size: 8px; }
+  .replay-control { padding: 13px; }
+  .scpi-presets { gap: 7px; }
+  .scpi-presets button { font-size: 9px; }
+  .instrument-fields { gap: 8px; }
+  .section-heading h2 { font-size: 14px; }
+  .frame-preview > span { font-size: 8px; }
+  .frame-preview .primary { margin-top: 5px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }

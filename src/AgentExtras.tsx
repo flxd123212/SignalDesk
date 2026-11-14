@@ -1,0 +1,43 @@
+import { useEffect, useState } from 'react';
+import { ArrowUpRight, Download, FileDiff, GitBranch, History, Plus, Square, TerminalSquare, X } from 'lucide-react';
+import { api, download } from './data';
+import { IconButton } from './ui';
+
+type Notify = (message: string, error?: boolean) => void;
+type Session = { id: string; name: string; parent: string; readOnly: boolean; busy: boolean };
+type AIState = { sessionId?: string; sessions?: Session[]; readOnly?: boolean; busy: boolean; config: { root: string }; actions: { id: string; type: string; path?: string; status: string }[] };
+type Change = { id: string; path: string; status: string; root: string; reason: string; createdAt: string; content: string; beforeContent: string; expectedHash: string; afterHash: string; diff: string; backup?: string; hunks: { oldStart: number; oldLines: number; newStart: number; newLines: number; lines: string[] }[] };
+
+export function AgentSessions({ state, mode, task, notify }: { state: AIState; mode: string; task: string; notify: Notify }) {
+  const act = async (url: string, body: object) => { try { await api(url, body); } catch (error) { notify((error as Error).message, true); } };
+  return <div className="agent-session-bar"><select aria-label="Agent 会话" value={state.sessionId || ''} onChange={event => act('/ai/sessions/select', { id: event.target.value })}>{state.sessions?.map(session => <option value={session.id} key={session.id}>{session.parent ? '↳ ' : ''}{session.name}{session.busy ? ' · 运行中' : ''}{session.readOnly ? ' · 只读' : ''}</option>)}</select><IconButton title="新建 Agent 会话" onClick={() => act('/ai/sessions/create', {})}><Plus size={15} /></IconButton><IconButton title="关闭当前 Agent 会话" disabled={state.busy || (state.sessions?.length || 0) < 2} onClick={() => act('/ai/sessions/close', { id: state.sessionId })}><X size={15} /></IconButton><button className="quiet-button" disabled={state.readOnly} onClick={() => act('/ai/delegate', { mode, task: task || '分析当前设备数据与工程，分别检查异常、固件风险和验证方案。' })}><GitBranch size={14} />启动子代理</button><IconButton title="停止全部 Agent" onClick={() => act('/ai/cancel-all', {})}><Square size={14} /></IconButton></div>;
+}
+
+export function ToolchainConsole({ root, notify, readOnly, defaultCommand, deviceId }: { root: string; notify: Notify; readOnly?: boolean; defaultCommand?: string; deviceId?: string }) {
+  const [line, setLine] = useState(defaultCommand || 'platformio run'), [plan, setPlan] = useState<{ command: string; args: string[]; cwd: string } | null>(null), [busy, setBusy] = useState(false);
+  useEffect(() => setPlan(null), [root, line]);
+  const preview = async () => { try { setPlan(await api('/ai/command/preview', { commandLine: line, deviceId, root })); } catch (error) { notify((error as Error).message, true); } };
+  const run = async () => { setBusy(true); try { await api('/ai/command/run', { commandLine: line, confirm: true, deviceId, root }); setPlan(null); } catch (error) { notify((error as Error).message, true); } finally { setBusy(false); } };
+  return <div className="toolchain-console"><div className="execution-heading"><TerminalSquare size={14} />工具链命令</div><select aria-label="工具链命令预设" value="" onChange={event => setLine(event.target.value)}><option value="">选择预设</option>{['platformio run', 'platformio device list', 'idf.py build', 'arduino-cli board list', 'cmake --build build', 'git status --short', 'git diff --stat'].map(value => <option key={value}>{value}</option>)}</select><div className="command-input-row"><input aria-label="工具链命令" className="mono" value={line} onChange={event => setLine(event.target.value)} onKeyDown={event => { if (event.key === 'Enter') void preview(); }} /><IconButton title="预览工具链命令" disabled={readOnly || !root} onClick={preview}><ArrowUpRight size={15} /></IconButton></div>{plan && <div className="command-plan"><code>{plan.cwd}</code><pre>{[plan.command, ...plan.args].map(value => JSON.stringify(value)).join(' ')}</pre><button className="primary compact-button" disabled={busy || readOnly || !root} onClick={run}>确认执行</button></div>}</div>;
+}
+
+function CodeLines({ content, start = 1, highlight, onLine }: { content: string; start?: number; highlight?: number; onLine?: (line: number) => void }) {
+  return <pre className="review-code">{content.replace(/\r\n/g, '\n').split('\n').map((line, index) => <span key={index} id={`source-line-${start + index}`} className={highlight === start + index ? 'highlight-line' : ''}><button title={`跳转到第 ${start + index} 行`} onClick={() => onLine?.(start + index)}>{start + index}</button><code>{line || ' '}</code></span>)}</pre>;
+}
+
+export function ChangeHistory({ state, notify }: { state: AIState; notify: Notify }) {
+  const [records, setRecords] = useState<Change[]>([]), [open, setOpen] = useState<Change | null>(null), [source, setSource] = useState<{ content: string; line: number } | null>(null);
+  const revision = state.actions.map(action => action.id + action.status).join('|');
+  useEffect(() => { let active = true; api<Change[]>('/ai/changes').then(value => { if (active) setRecords(value); }).catch(error => notify(error.message, true)); setOpen(null); setSource(null); return () => { active = false; }; }, [state.config.root, revision]);
+  const view = async (id: string) => { try { setOpen(await api<Change>(`/ai/changes/${id}`)); setSource(null); } catch (error) { notify((error as Error).message, true); } };
+  const jump = async (line: number) => {
+    if (!open) return;
+    try { const file = await api<{ content: string }>(`/ai/file?path=${encodeURIComponent(open.path)}`); setSource({ content: file.content, line }); }
+    catch (error) { notify((error as Error).message, true); }
+  };
+  useEffect(() => { if (source) document.querySelector('.current-source .highlight-line')?.scrollIntoView({ block: 'center' }); }, [source]);
+  const pending = state.actions.filter(action => action.type === 'file' && !records.some(record => record.id === action.id));
+  return <div className="change-history"><div className="execution-heading"><History size={14} /><span>修改记录</span><small>{records.length}</small></div>{!records.length && !pending.length && <div className="no-actions">暂无修改记录</div>}{[...pending, ...records].map(record => <button className="history-record" key={record.id} onClick={() => view(record.id)}><FileDiff size={14} /><span>{record.path}<small>{record.status}{'createdAt' in record ? ` · ${new Date(record.createdAt as string).toLocaleString('zh-CN', { hour12: false })}` : ''}</small></span><ArrowUpRight size={14} /></button>)}
+    {open && <div className="modal-backdrop"><section className="change-dialog" role="dialog" aria-modal="true" aria-label="代码修改对照"><div className="panel-toolbar"><div className="panel-title"><FileDiff size={16} /><span>{open.path}</span><span className="small-tag">{open.status}</span></div><div className="toolbar-actions"><IconButton title="导出修改记录" onClick={() => download(`change-${open.id}.json`, JSON.stringify(open, null, 2), 'application/json')}><Download size={15} /></IconButton><IconButton title="关闭代码对照" onClick={() => setOpen(null)}><X size={17} /></IconButton></div></div><div className="change-meta"><p>{open.reason}</p><code>SHA256 {open.expectedHash?.slice(0, 16)} → {open.afterHash?.slice(0, 16)}</code>{open.backup && <code>备份：{open.backup}</code>}</div><div className="change-hunks">{open.hunks.map((hunk, index) => <section className="change-hunk" key={index}><div className="hunk-heading"><span>修改前 L{hunk.oldStart} / 修改后 L{hunk.newStart}</span><button className="quiet-button" onClick={() => jump(open.status === 'applied' ? hunk.newStart : hunk.oldStart)}><ArrowUpRight size={13} />定位当前文件</button></div><div className="diff-columns"><div><h3>修改前</h3><CodeLines content={hunk.lines.filter(line => !line.startsWith('+') && !line.startsWith('\\')).map(line => line.slice(1)).join('\n')} start={hunk.oldStart} onLine={line => jump(open.status === 'applied' ? hunk.newStart : line)} /></div><div><h3>修改后</h3><CodeLines content={hunk.lines.filter(line => !line.startsWith('-') && !line.startsWith('\\')).map(line => line.slice(1)).join('\n')} start={hunk.newStart} onLine={line => jump(open.status === 'applied' ? line : hunk.oldStart)} /></div></div></section>)}</div>{source && <div className="current-source"><div className="hunk-heading"><b>当前文件 · {open.path} : {source.line}</b><IconButton title="关闭当前源码" onClick={() => setSource(null)}><X size={14} /></IconButton></div><CodeLines content={source.content} highlight={source.line} onLine={line => setSource({ ...source, line })} /></div>}</section></div>}
+  </div>;
+}

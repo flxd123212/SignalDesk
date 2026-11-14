@@ -1,0 +1,48 @@
+appId: com.signaldesk.workbench
+productName: SignalDesk
+directories:
+  output: release
+  buildResources: desktop/assets
+electronDist: node_modules/electron/dist
+asar: false
+npmRebuild: false
+files:
+  - dist/**/*
+  - server/**/*
+  - shared/**/*
+  - desktop/main.cjs
+  - desktop/preload.cjs
+  - desktop/resources.cjs
+  - desktop/assets/icon.ico
+  - package.json
+extraResources:
+  - from: firmware-examples
+    to: firmware-examples
+    filter:
+      - '**/*'
+      - '!**/build/**'
+      - '!**/.signaldesk*/**'
+win:
+  icon: desktop/assets/icon.ico
+  executableName: SignalDesk
+  signExecutable: false
+  target:
+    - target: nsis
+      arch: [x64]
+    - target: portable
+      arch: [x64]
+nsis:
+  artifactName: SignalDesk-Setup-${version}-${arch}.${ext}
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: SignalDesk
+  uninstallDisplayName: SignalDesk
+  installerLanguages: [zh_CN, en_US]
+  language: '2052'
+  runAfterFinish: false
+  deleteAppDataOnUninstall: false
+portable:
+  artifactName: SignalDesk-Portable-${version}-${arch}.${ext}

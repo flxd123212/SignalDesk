@@ -1,0 +1,14 @@
+export type Config = { path: string; transport?: 'serial' | 'bluetooth'; baudRate: number; dataBits: number; stopBits: number; parity: string; rtscts: boolean; dtr: boolean; rts: boolean; protocol: string; sampleRate: number; schema?: object };
+export type PortBinding = { key: string; path: string; vendorId: string; productId: string; serialNumber: string; autoMatch: boolean };
+export type ProjectProfile = { version: number; targetId: string; kind: string; target: string; name: string; chip: string; board: string; family?: string; root: string; entryFile: string; buildCommand: string; serial: Config; evidence: string[]; warnings: string[]; aiInherited: boolean };
+export type Device = { id: string; name: string; connected: boolean; busy?: boolean; path: string; source: string; recording?: string; rxBytes: number; txBytes: number; chip?: string; board?: string; projectRoot?: string; projectProfile?: ProjectProfile | null; portBinding?: PortBinding | null };
+export type Sample = { time: number; values: number[] };
+export type Packet = { id: number; time: number; dir: 'RX' | 'TX'; data: string; length: number; text: string; hex: string };
+export type AppState = { activeDevice?: string; devices?: Device[]; connected: boolean; busy: boolean; source: string; config: Config; rxBytes: number; txBytes: number; frames: number; parseErrors: number; processingErrors: number; dropped: number; latest: number[]; names: string[]; processingMode: string; recording: { id: string; bytes: number } | null; timedSend: number | null; replay: { id: string; duration: number; position: number; speed: number; playing: boolean } | null };
+export type Identification = { chip: string; board: string; family: string; confidence: string; source?: string; evidence: string; project?: string; target?: string; tool?: string };
+export type ChipFamily = { id: string; name: string; tool: string; adapter?: string; chips: string[]; boards: string[] };
+export type Port = { path: string; manufacturer?: string; friendlyName?: string; serialNumber?: string; vendorId?: string; productId?: string; identification?: { interface: string; chip: string; board: string; family: string; confidence: string; evidence: string[]; key: string } };
+export type PortSnapshot = { ports: Port[]; initialized: boolean; revision: number; checkedAt: string | null; error: string; added?: Port[]; removed?: Port[] };
+export type Command = { id: string; name: string; text: string; format: 'text' | 'hex' | 'mixed'; ending: string; checksum: string };
+export type Session = { id: string; bytes: number; modified: string; active: boolean };
+export type Page = 'workspace' | 'terminal' | 'graph' | 'script' | 'commands' | 'instruments' | 'sessions' | 'agent' | 'frames' | 'automation' | 'chips' | 'overview' | 'logs' | 'external' | 'alarms' | 'can' | 'attitude' | 'widgets' | 'editor';

@@ -1,0 +1,102 @@
+.ide-shell .agent-console { --console-bg: #111416; --console-line: #2b3135; background: var(--console-bg); border-color: #32393e; border-radius: 3px; }
+.ide-shell .agent-console > .panel-toolbar { height: 38px; min-height: 38px; padding: 0 12px; background: #1a1e21; border-color: var(--console-line); }
+.agent-console > .panel-toolbar .panel-title { gap: 8px; font: 12px var(--mono); color: #d6dce0; }
+.agent-console .panel-title > svg { color: var(--accent); }
+.agent-console .panel-title .small-tag { border: 0; background: #ffffff07; font-size: 9px; color: #8c9a9f; }
+.agent-console > .panel-toolbar .toolbar-actions { gap: 3px; min-width: 0; }
+.agent-console .toolbar-actions .icon-button { width: 26px; height: 26px; flex: none; }
+.agent-console .toolbar-actions .icon-button[aria-pressed=true] { color: var(--accent); background: #ffffff06; }
+.agent-console .agent-model-name { color: #a8b8c0; margin-right: 6px; font-size: 11px; }
+.ide-shell .agent-console.agent-page > .agent-session-bar { display: flex; align-items: center; gap: 5px; padding: 4px 12px; min-height: 34px; background: #15191c; border-color: var(--console-line); }
+.ide-shell .agent-console .agent-session-bar > select { width: 160px; min-width: 0; max-width: 200px; height: 26px; background: transparent; border-color: transparent; color: #aeb9bf; font: 11px var(--mono); }
+.agent-console .agent-session-bar .icon-button { width: 24px; height: 24px; }
+.agent-console:not(.agent-options-open) .agent-session-bar > .quiet-button,
+.agent-console:not(.agent-options-open) .agent-session-bar > .icon-button:last-child { display: none; }
+.ide-shell .agent-console .agent-project-context { padding: 7px 14px; border-color: var(--console-line); background: #15191c; font: 11px/1.6 var(--mono); }
+.agent-console .agent-conversation { background: var(--console-bg); }
+.ide-shell .agent-console .agent-controls { background: #161b1e; padding: 7px 12px; border-color: var(--console-line); font-size: 11px; }
+.agent-console .console-commandbar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 6px 12px; border-bottom: 1px solid var(--console-line); }
+.ide-shell .agent-console .agent-quick-actions { display: flex; flex-wrap: nowrap; gap: 2px; padding: 0; }
+.ide-shell .agent-console .agent-quick-actions .icon-button { width: 27px; height: 27px; padding: 0; border: 0; color: #96a6ae; }
+.ide-shell .agent-console .agent-task-row { display: flex; flex: 1; flex-wrap: wrap; gap: 6px; padding: 0; border: 0; min-width: 0; }
+.ide-shell .agent-console .agent-task-row > select { width: 130px; max-width: 150px; flex: 0 1 150px; min-width: 105px; height: 27px; font-size: 11px; background: #191e21; border-color: #2b3338; }
+.agent-console .agent-task-row > .quiet-button { font-size: 11px; height: 27px; border-color: transparent; color: #a2b0b7; padding: 0 7px; }
+.agent-console .agent-step-limit { margin-left: auto; }
+.ide-shell .agent-console .agent-messages { padding: 10px 22px 18px; font-family: var(--mono); scrollbar-gutter: stable; }
+.ide-shell .agent-console .agent-empty { display: block; min-height: 140px; height: auto; padding: 20px 0; }
+.agent-console .console-welcome { display: flex; align-items: center; gap: 9px; color: var(--accent); }
+.ide-shell .agent-console .console-welcome h2 { margin: 0; font: 13px var(--mono); color: #c7d1d5; }
+.agent-console .console-welcome > span { color: #6f7d85; font: 10px var(--mono); margin-left: 5px; }
+.agent-console .console-workdir { display: flex; gap: 16px; margin: 19px 0 12px; font: 11px/1.8 var(--mono); color: #8f9da4; }
+.agent-console .console-workdir > span { color: #646f76; }
+.agent-console .console-workdir code { min-width: 0; overflow-wrap: anywhere; }
+.ide-shell .agent-console .agent-context-summary { font-size: 11px; color: #829298; flex-wrap: wrap; gap: 12px; }
+.ide-shell .agent-console .agent-message { padding: 14px 0 17px; border: 0; }
+.agent-console .message-meta { font: 10px var(--mono); gap: 8px; margin-bottom: 7px; color: #83959e; }
+.agent-console .message-meta b { font-weight: 400; }
+.agent-console .console-marker { width: 12px; color: var(--accent); font-size: 14px; }
+.agent-console .message-meta time { color: #66757d; font: 10px var(--mono); margin-left: 7px; }
+.ide-shell .agent-console .message-content { font: 13px/1.85 var(--mono); color: #d1d7db; padding-left: 20px; }
+.ide-shell .agent-console .agent-message.user { margin: 5px 0 9px; padding: 10px 12px 11px; border-left: 2px solid var(--accent); background: #ffffff04; }
+.agent-console .agent-message.user .console-marker { color: #b5cce0; }
+.ide-shell .agent-console .agent-message.user .message-content { color: #bed2df; }
+.ide-shell .agent-console .agent-message.tool { display: flex; align-items: baseline; flex-wrap: wrap; gap: 9px; padding: 5px 0; }
+.agent-console .agent-message.tool .message-meta { margin: 0; flex: none; }
+.agent-console .agent-message.tool .message-meta b { display: none; }
+.agent-console .agent-message.tool .message-meta time { margin: 0; }
+.ide-shell .agent-console .agent-message.tool .message-content { padding: 0; color: #859b8d; font-size: 11px; }
+.agent-console .agent-message.tool .console-marker { color: #7f9a89; }
+.ide-shell .agent-console .agent-message.error .message-content, .agent-console .agent-message.error .console-marker { color: #e3a49b; }
+.agent-console .console-prose { white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-console .console-prose > code { color: #e0c991; background: #ffffff07; padding: 1px 4px; border-radius: 2px; }
+.agent-console .console-prose > strong { color: #e7ecee; font-weight: 600; }
+.agent-console .agent-working { padding: 13px 0 7px; margin-top: 6px; font: 10px/1.7 var(--mono); color: #8aa999; }
+.agent-console .agent-working.error { color: #e3a49b; }
+.agent-console .agent-working.retrying { color: #d5bc87; }
+.ide-shell .agent-console .agent-compose { padding: 10px 16px 8px; background: #14181a; border-top: 1px solid #354139; position: relative; }
+.agent-console .console-prompt-heading { display: flex; align-items: center; gap: 7px; color: var(--accent); font: 10px var(--mono); padding: 0 0 7px; }
+.agent-console .console-prompt-target { color: #818f97; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.agent-console .console-prompt-heading > small { font: 9px var(--mono); color: #899a91; margin-left: auto; }
+.agent-console .agent-input-row { border: 1px solid #303b3b; border-radius: 3px; align-items: flex-start; gap: 7px; padding: 9px; background: #101416; }
+.agent-console .agent-input-row:focus-within { border-color: var(--accent); }
+.agent-console .console-input-marker { color: var(--accent); font: 16px/1.7 var(--mono); flex: none; }
+.ide-shell .agent-console .agent-input-row textarea { border: 0; background: transparent; padding: 0 0 4px; box-shadow: none; outline: none; color: #d4dde0; height: 48px; min-height: 48px; max-height: 150px; resize: vertical; font: 13px/1.8 var(--mono); }
+.agent-console .agent-input-row textarea::placeholder { color: #65777c; }
+.agent-console .agent-input-row .primary { height: 30px; min-width: 62px; font-size: 11px; align-self: flex-end; border-radius: 3px; background: #2a4a40; color: #a1e3ca; border-color: #3b6555; }
+.agent-console .agent-attachments { padding: 8px 0 0; gap: 12px; font-size: 10px; color: #829198; }
+.agent-console .agent-attachments > span { color: #73877b; display: block; font: 9px var(--mono); }
+.agent-console .console-commands { position: absolute; bottom: calc(100% + 5px); left: 16px; right: 16px; max-height: 230px; overflow-y: auto; padding: 5px; border: 1px solid #43534e; border-radius: 4px; background: #1a2122; box-shadow: 0 8px 25px #0006; z-index: 4; }
+.agent-console .console-commands > button { display: flex; width: 100%; justify-content: flex-start; padding: 9px 10px; gap: 18px; border-radius: 2px; text-align: left; }
+.agent-console .console-commands > button[aria-selected=true] { background: #2a3934; }
+.agent-console .console-commands code { color: #9bddbf; min-width: 80px; font: 12px var(--mono); }
+.agent-console .console-commands span { color: #a4b3b9; font-size: 11px; white-space: normal; }
+.agent-console .console-code { margin: 10px 0; border-left: 2px solid #39464e; background: #191e21; white-space: normal; }
+.agent-console .console-code-heading { display: flex; align-items: center; justify-content: space-between; padding: 3px 8px 3px 12px; font: 10px var(--mono); color: #84959f; border-bottom: 1px solid #293238; }
+.agent-console .console-code-heading .icon-button { width: 25px; height: 25px; }
+.agent-console .console-code pre { margin: 0; max-height: 360px; overflow: auto; padding: 12px; color: #d1d7db; font: 12px/1.8 var(--mono); tab-size: 2; }
+.agent-console .tok-keyword { color: #96bff0; }
+.agent-console .tok-typeName, .agent-console .tok-className { color: #6bcbb8; }
+.agent-console .tok-variableName, .agent-console .tok-propertyName { color: #c0d5e4; }
+.agent-console .tok-string, .agent-console .tok-character { color: #deb099; }
+.agent-console .tok-number, .agent-console .tok-bool, .agent-console .tok-null { color: #b6cf9a; }
+.agent-console .tok-comment { color: #829f79; font-style: italic; }
+.agent-console .tok-meta, .agent-console .tok-processingInstruction { color: #c3accf; }
+.ide-shell .agent-console.compact-agent > .agent-session-bar { display: flex; }
+.ide-shell .agent-console.compact-agent .agent-session-bar > select { flex: 1; }
+.ide-shell .agent-console.compact-agent .agent-task-row > select { flex: 1; min-width: 100px; }
+.ide-shell .agent-console.compact-agent .agent-messages { padding: 9px 12px 14px; }
+.ide-shell .agent-console.compact-agent .message-content { font-size: 12px; }
+.ide-shell .agent-console.compact-agent .agent-compose { padding: 9px; }
+@media (max-width: 650px) {
+  .ide-shell .agent-console > .panel-toolbar { padding: 0 8px; }
+  .agent-console > .panel-toolbar .panel-title { font-size: 11px; }
+  .agent-console .toolbar-actions .icon-button { width: 23px; }
+  .ide-shell .agent-console .agent-messages { padding: 8px 12px 14px; }
+  .ide-shell .agent-console .message-content { font-size: 12px; line-height: 1.8; }
+  .ide-shell .agent-console .agent-compose { padding: 9px; }
+  .agent-console .console-commandbar { padding: 6px 9px; }
+  .ide-shell .agent-console .agent-task-row > select { flex: 1; min-width: 110px; }
+  .agent-console .agent-step-limit { margin-left: 0; }
+  .agent-console .agent-attachments { gap: 9px; font-size: 9px; }
+  .agent-console .console-welcome > span { display: none; }
+}
