@@ -5,7 +5,35 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#151719" />
     <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/startup.css" />
     <title>SignalDesk · 嵌入式开发工作台</title>
   </head>
-  <body><div id="root"></div><script type="module" src="/src/main.tsx"></script></body>
+  <body>
+    <dialog id="signaldesk-startup" aria-label="SignalDesk 启动" aria-describedby="boot-status">
+      <div class="boot-topline"><span>SIGNALDESK / WORKBENCH</span><span>LOCAL</span></div>
+      <div class="boot-center">
+        <svg class="boot-signal" viewBox="0 0 580 148" aria-hidden="true">
+          <path class="boot-trace-base" d="M20 74H82L98 74L110 46L124 102L139 60L153 74H240 M340 74H400L418 46H448L466 74H560 M100 122H188L212 98H240 M340 98H368L392 122H480" />
+          <path class="boot-trace" pathLength="1" d="M20 74H82L98 74L110 46L124 102L139 60L153 74H240 M340 74H400L418 46H448L466 74H560" />
+          <path class="boot-trace secondary" pathLength="1" d="M100 122H188L212 98H240 M340 98H368L392 122H480" />
+          <g class="boot-chip">
+            <path class="boot-pins" d="M262 30V16 M280 30V16 M300 30V16 M318 30V16 M262 118V132 M280 118V132 M300 118V132 M318 118V132 M246 48H232 M246 64H232 M246 84H232 M246 102H232 M334 48H348 M334 64H348 M334 84H348 M334 102H348" />
+            <rect class="boot-chip-outline" x="246" y="30" width="88" height="88" rx="8" />
+            <!-- CircuitBoard mark from lucide (ISC), matching the workbench header. -->
+            <g class="boot-logo" transform="translate(260 44) scale(2.5)"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M11 9h4a2 2 0 0 0 2-2V3" /><circle cx="9" cy="9" r="2" /><path d="M7 21v-4a2 2 0 0 1 2-2h4" /><circle cx="15" cy="15" r="2" /></g>
+          </g>
+          <text class="boot-label" x="20" y="54">RX</text><text class="boot-label" x="546" y="54">TX</text>
+        </svg>
+        <h1 class="boot-brand">Signal<span>Desk</span></h1>
+        <p class="boot-subtitle">嵌入式开发工作台</p>
+        <ol class="boot-stages"><li><i></i>工作台界面</li><li><i></i>本地服务</li><li><i></i>设备与工程</li></ol>
+        <p class="boot-status" id="boot-status" role="status">正在加载工作台界面</p>
+        <div class="boot-track" aria-hidden="true"></div>
+      </div>
+      <div class="boot-footer"><span class="boot-version">SignalDesk</span><button type="button" data-boot-retry hidden>重新加载</button><button type="button" data-boot-skip autofocus>跳过动画</button></div>
+    </dialog>
+    <div id="root"></div>
+    <script src="/startup.js"></script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
 </html>

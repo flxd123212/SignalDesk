@@ -1,11 +1,13 @@
-const { app, BrowserWindow, Menu, ipcMain, dialog, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, dialog, shell, safeStorage } = require('electron');
 const path = require('node:path');
 const { pathToFileURL } = require('node:url');
 const fs = require('node:fs');
 const { prepareExamples } = require('./resources.cjs');
+const { createBackgroundStore } = require('./appearance.cjs');
 const runtimes = new Set();
+const closingRuntimes = new Set();
 const trustedWindows = new Map();
-let startServer, examplesDirectory, windowNumber = 0, quitting = false;
+let startServer, examplesDirectory, agentEncryption = null, windowNumber = 0, quitting = false;
 app.setName('SignalDesk');
 app.setAppUserModelId('com.signaldesk.workbench');
 if (process.env.SIGNALDESK_USER_DATA) app.setPath('userData', path.resolve(process.env.SIGNALDESK_USER_DATA));
@@ -13,15 +15,16 @@ if (process.env.SIGNALDESK_USER_DATA) app.setPath('userData', path.resolve(proce
 async function openWindow(existingRuntime, panel) {
   const number = existingRuntime ? 0 : ++windowNumber;
   const directory = number === 1 ? path.join(app.getPath('userData'), 'sessions') : path.join(app.getPath('userData'), 'windows', String(number), 'sessions');
-  const runtime = existingRuntime || await startServer({ port: 0, directory, examplesDirectory }); runtimes.add(runtime);
+  const runtime = existingRuntime || await startServer({ port: 0, directory, examplesDirectory, agentEncryption }); runtimes.add(runtime);
   const window = new BrowserWindow({
     width: panel ? 1100 : 1500, height: panel ? 800 : 980, minWidth: 720, minHeight: 540,
-    backgroundColor: '#151719', title: `SignalDesk · 工作区 ${number}`,
+    show: false, backgroundColor: '#131719', title: `SignalDesk · 工作区 ${number}`,
     icon: path.join(__dirname, 'assets', 'icon.ico'),
     ...(process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#202429', symbolColor: '#cbd3dc', height: 40 } } : {}),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: true, backgroundThrottling: false },
   });
   if (process.platform === 'win32') window.removeMenu();
+  window.once('ready-to-show', () => { if (!window.isDestroyed()) window.show(); });
   trustedWindows.set(window.webContents.id, { window, origin: runtime.address, runtime, panel });
   const fullscreenState = () => { if (!window.isDestroyed()) window.webContents.send('desktop:fullscreen', window.isFullScreen()); };
   window.on('enter-full-screen', fullscreenState);
@@ -42,11 +45,22 @@ async function openWindow(existingRuntime, panel) {
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', (event, url) => { if (new URL(url).origin !== runtime.address) event.preventDefault(); });
   const contentsId = window.webContents.id;
-  window.on('closed', () => { trustedWindows.delete(contentsId); if (![...trustedWindows.values()].some(entry => entry.runtime === runtime) && runtimes.delete(runtime)) void runtime.close(); });
-  await window.loadURL(panel ? `${runtime.address}/?view=${panel}&detached=1` : runtime.address);
+  window.on('closed', () => {
+    trustedWindows.delete(contentsId);
+    if (![...trustedWindows.values()].some(entry => entry.runtime === runtime) && runtimes.delete(runtime)) {
+      const closing = runtime.close(); closingRuntimes.add(closing);
+      void closing.finally(() => closingRuntimes.delete(closing)).catch(console.error);
+    }
+  });
+  try { await window.loadURL(panel ? `${runtime.address}/?view=${panel}&detached=1` : runtime.address); }
+  catch (error) { if (!window.isDestroyed()) window.destroy(); throw error; }
 }
 
 app.whenReady().then(async () => {
+  const encryptionAvailable = await safeStorage.isAsyncEncryptionAvailable();
+  if (encryptionAvailable && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text')) {
+    agentEncryption = { encrypt: text => safeStorage.encryptStringAsync(text), decrypt: async bytes => (await safeStorage.decryptStringAsync(bytes)).result };
+  }
   const templates = app.isPackaged ? path.join(process.resourcesPath, 'firmware-examples') : path.join(__dirname, '..', 'firmware-examples');
   examplesDirectory = await prepareExamples(templates, app.getPath('userData'));
   const trustedWindow = event => {
@@ -64,6 +78,10 @@ app.whenReady().then(async () => {
     Menu.getApplicationMenu()?.items[index]?.submenu?.popup({ window });
   });
   const preferencesPath = path.join(app.getPath('userData'), 'preferences.json');
+  const backgrounds = createBackgroundStore(path.join(app.getPath('userData'), 'appearance'));
+  ipcMain.handle('desktop:background:save', (event, data) => { trustedWindow(event); return backgrounds.save(data); });
+  ipcMain.handle('desktop:background:read', (event, id) => { trustedWindow(event); return backgrounds.read(id); });
+  ipcMain.handle('desktop:background:remove', (event, id) => { trustedWindow(event); backgrounds.remove(id); });
   ipcMain.on('desktop:preferences:read', event => {
     let preferences = null;
     if (trustedWindows.has(event.sender.id)) {
@@ -107,8 +125,8 @@ app.whenReady().then(async () => {
 });
 app.on('window-all-closed', () => app.quit());
 app.on('before-quit', event => {
-  if (quitting || !runtimes.size) return;
+  if (quitting || (!runtimes.size && !closingRuntimes.size)) return;
   event.preventDefault(); quitting = true;
   const running = [...runtimes]; runtimes.clear();
-  Promise.allSettled(running.map(runtime => runtime.close())).finally(() => app.quit());
+  Promise.allSettled([...closingRuntimes, ...running.map(runtime => runtime.close())]).finally(() => app.quit());
 });

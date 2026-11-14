@@ -109,7 +109,8 @@ test('provider settings protect keys across hosts and connection tests are cance
   await agent.configure({ apiKey: 'old-secret', model: 'fixture' });
   await agent.configure({ baseUrl: 'https://api.deepseek.com', apiStyle: 'chat' }); assert.equal(agent.config.apiKey, '');
   await agent.configure({ apiKey: 'new-secret', maxOutputTokens: 8192, timeoutSeconds: 120 });
-  await assert.rejects(agent.configure({ apiStyle: 'responses' }), /Chat Completions/);
+  await agent.configure({ apiStyle: 'responses' }); assert.equal(agent.config.apiKey, 'new-secret');
+  await assert.rejects(agent.configure({ apiStyle: 'gemini' }), /Chat Completions/);
   await assert.rejects(agent.configure({ timeoutSeconds: 0 }), /整数/);
   const pending = agent.testConnection(); assert.equal(agent.busy, true); agent.cancel(); await assert.rejects(pending, /停止/); assert.equal(agent.busy, false);
   assert.equal(JSON.stringify(agent.publicConfig()).includes('new-secret'), false);

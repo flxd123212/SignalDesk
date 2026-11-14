@@ -1,12 +1,12 @@
 import { randomBytes, randomUUID, createHash } from 'node:crypto';
-import { AGENT_TOOLS } from '../ai/tools.mjs';
+import { AGENT_TOOLS, READ_ONLY_TOOLS } from '../ai/tools.mjs';
 import { captureSnapshot } from '../ai/analysis.mjs';
 
 const digest = token => createHash('sha256').update(token).digest('hex');
 const object = properties => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
 const string = { type: 'string' };
 export const PERMISSIONS = ['read', 'propose', 'write', 'serial', 'toolchain'];
-const baseTools = AGENT_TOOLS.filter(tool => tool.name !== 'propose_build').map(tool => ({ ...tool, permission: ['get_device_snapshot', 'list_firmware_files', 'read_firmware_file'].includes(tool.name) ? 'read' : 'propose' }));
+const baseTools = AGENT_TOOLS.filter(tool => !['propose_build', 'get_serial_logs'].includes(tool.name)).map(tool => ({ ...tool, permission: READ_ONLY_TOOLS.has(tool.name) ? 'read' : 'propose' }));
 export const EXTERNAL_TOOLS = [
   ...baseTools,
   { name: 'submit_advice', description: 'Record an external Agent recommendation in the bound device conversation.', permission: 'propose', parameters: object({ message: string }) },

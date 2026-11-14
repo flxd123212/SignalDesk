@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
+import http from 'node:http';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
@@ -71,6 +72,21 @@ try {
   await window.getByRole('button', { name: '分析数据', exact: true }).click();
   await window.waitForFunction(() => document.querySelector('[aria-label="Agent 运行状态"]')?.textContent?.includes('本地检查完成'));
   assert.equal((await call('/ai/state')).progress.phase, 'complete');
+  const modelServer = http.createServer((request, response) => {
+    request.resume(); request.on('end', () => { response.setHeader('Content-Type', 'application/json'); response.setHeader('x-request-id', 'package-trace'); response.end(JSON.stringify({ model: 'package-resolved', id: 'package-response', choices: [{ message: { content: '调用来源测试完成。此回复来自本机测试接口。' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 6 } })); });
+  });
+  await new Promise(resolve => modelServer.listen(0, '127.0.0.1', resolve));
+  try {
+    await call('/ai/config', { baseUrl: `http://127.0.0.1:${modelServer.address().port}/v1`, model: 'package-requested', apiStyle: 'chat', apiKey: 'package-fixture-key' });
+    const result = await call('/ai/run', { mode: 'ai', message: 'Verify call metadata' });
+    assert.equal(result.messages.at(-1).provenance.reportedModel, 'package-resolved'); assert.equal(result.context.turns, 1);
+    assert.ok(!JSON.stringify(result).includes('package-fixture-key'));
+    const details = window.locator('.agent-call-details').last(); await details.locator('summary').click(); await details.locator('p').scrollIntoViewIfNeeded();
+    assert.match(await details.innerText(), /package-trace/);
+    await window.screenshot({ path: path.resolve('artifacts/packaged-agent-call-record.png') });
+    const reset = await call('/ai/context/reset', { sessionId: result.sessionId }); assert.equal(reset.context.turns, 0); assert.ok(reset.messages.some(message => message.provenance?.reportedModel === 'package-resolved'));
+    await call('/ai/config', { ...ai.config, clearKey: true });
+  } finally { modelServer.closeAllConnections(); await new Promise(resolve => modelServer.close(resolve)); }
   await window.screenshot({ path: path.resolve('artifacts/packaged-agent-console.png') });
   await window.getByRole('button', { name: '实时监测', exact: true }).click();
   await window.screenshot({ path: path.resolve('artifacts/packaged-desktop.png') });

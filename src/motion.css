@@ -1,0 +1,75 @@
+@keyframes surface-enter { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes overlay-enter { from { opacity: 0; } to { opacity: 1; } }
+
+.app-shell { --motion-duration: 240ms; --motion-distance: 8px; --motion-ease: cubic-bezier(.2,.7,.2,1); }
+.app-shell[data-motion-style=subtle] { --motion-duration: 140ms; --motion-distance: 3px; }
+@keyframes panel-enter-left { from { opacity: .4; transform: translateX(calc(-1 * var(--motion-distance))); } to { opacity: 1; transform: translateX(0); } }
+@keyframes panel-enter-right { from { opacity: .4; transform: translateX(var(--motion-distance)); } to { opacity: 1; transform: translateX(0); } }
+@keyframes panel-enter-up { from { opacity: .4; transform: translateY(var(--motion-distance)); } to { opacity: 1; transform: translateY(0); } }
+@keyframes tab-select { from { transform: scaleX(.25); opacity: .4; } to { transform: scaleX(1); opacity: 1; } }
+@keyframes nav-select { from { transform: scaleY(.3); } to { transform: scaleY(1); } }
+@keyframes status-connect { 0% { box-shadow: 0 0 0 0 #73d8bb66; } 100% { box-shadow: 0 0 0 5px #73d8bb00; } }
+@keyframes notice-check { from { opacity: .3; transform: scale(.65); } to { opacity: 1; transform: scale(1); } }
+@keyframes alarm-alert { 0%,100% { transform: rotate(0); } 25% { transform: rotate(-12deg); } 70% { transform: rotate(10deg); } }
+@keyframes loading-sweep { from { transform: translateX(-100%); } to { transform: translateX(200%); } }
+
+.ide-sidebar:not([hidden]) { animation: panel-enter-left var(--motion-duration) var(--motion-ease); }
+.agent-dock, .agent-execution { animation: panel-enter-right var(--motion-duration) var(--motion-ease); }
+.bottom-dock, .context-sendbar:not([hidden]) { animation: panel-enter-up var(--motion-duration) var(--motion-ease); }
+.sidebar-page:not([hidden]), .agent-options-open .agent-controls, .agent-options-open .agent-session-bar,
+.agent-options-open .agent-task-row, .console-search, .scope-cursors, .scope-trigger-controls,
+.explorer-folder[open] > .explorer-file, .explorer-outline[open] > div, .explorer-opened[open] > div {
+  animation: surface-enter var(--motion-duration) var(--motion-ease);
+}
+.metrics-row > .metric { animation: panel-enter-up var(--motion-duration) var(--motion-ease) backwards; }
+.metrics-row > .metric:nth-child(2) { animation-delay: 35ms; }
+.metrics-row > .metric:nth-child(3) { animation-delay: 70ms; }
+.metrics-row > .metric:nth-child(4) { animation-delay: 105ms; }
+.app-shell button { transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, transform 120ms ease; }
+.app-shell button:enabled:active { transform: scale(.97); }
+.app-shell input[type=checkbox], .app-shell input[type=radio] { transition: accent-color 150ms ease, transform 120ms ease; }
+.app-shell input[type=checkbox]:enabled:active, .app-shell input[type=radio]:enabled:active { transform: scale(.9); }
+.app-shell .icon-button > svg, .explorer-folder > summary > svg:first-child { transition: transform 180ms var(--motion-ease); }
+.app-shell .icon-button:enabled:hover > .lucide-settings { transform: rotate(25deg); }
+.app-shell .icon-button:enabled:hover > .lucide-plus { transform: rotate(90deg); }
+.panel-divider { transition: background-color 160ms ease; }
+.workpage-tabs > div, .source-tabs > div, .device-tabs > div { position: relative; transition: background-color 160ms ease; }
+.workpage-tabs > .active::after, .source-tabs > .active::after, .device-tabs > .active::after {
+  content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; pointer-events: none;
+  background: var(--accent); transform-origin: left; animation: tab-select var(--motion-duration) var(--motion-ease);
+}
+.navigation .nav-group > button.active::before { animation: nav-select var(--motion-duration) var(--motion-ease); }
+.status-dot.live { animation: status-connect 650ms ease-out; }
+.record-button.is-recording > svg, .status-dot.recording { animation: status-breathe 1.5s ease-in-out infinite; }
+.alarm-bell.warning > svg { animation: alarm-alert 380ms ease-in-out 2; }
+.toast:not(.error) > .lucide-check { animation: notice-check 240ms 60ms var(--motion-ease) backwards; }
+.page-loading { position: relative; overflow: hidden; width: fit-content; min-width: 180px; padding: 22px 16px; color: var(--muted); font-size: 12px; }
+.page-loading::after { content: ''; position: absolute; left: 0; bottom: 8px; height: 2px; width: 50%; background: var(--accent); animation: loading-sweep 1.2s ease-in-out infinite; }
+.settings-motion-controls { display: flex; align-items: end; gap: 12px; margin: 12px 0 18px; flex-wrap: wrap; }
+.settings-motion-controls .field { flex: 1; min-width: 130px; margin: 0; }
+.settings-motion-controls .quiet-button { min-height: 34px; margin: 0; }
+
+.modal-backdrop { animation: overlay-enter 120ms ease-out; }
+.modal-backdrop > section, .app-shell dialog[open], .console-commands, .menu-popup, .toast {
+  animation: surface-enter 180ms cubic-bezier(.2, .7, .2, 1);
+}
+.app-shell dialog[open]::backdrop { animation: overlay-enter 150ms ease-out; }
+.agent-console .message-enter { animation: surface-enter 180ms ease-out; }
+.agent-tool-event[open] .tool-event-body, .agent-task-plan .task-plan-body { animation: surface-enter 160ms ease-out; }
+@keyframes status-breathe { 0%, 100% { opacity: .65; } 50% { opacity: 1; } }
+.agent-console .agent-working.model > svg, .agent-console .agent-working.tool > svg { animation: spin 1.5s linear infinite; }
+.agent-tool-event.running summary > small { animation: status-breathe 1.4s ease-in-out infinite; }
+.agent-console .agent-input-row, input, textarea, select { transition: border-color 140ms ease, background-color 140ms ease; }
+.agent-console button[aria-expanded] > svg { transition: transform 160ms ease; }
+.agent-console button[aria-expanded=true] > .lucide-chevron-down { transform: rotate(180deg); }
+.agent-console .agent-session-bar .session-storage { display: inline-flex; align-items: center; gap: 5px; min-width: 0; color: #89a69a; font: 10px var(--mono); }
+.agent-console .session-storage svg { flex: none; }
+.agent-console .session-storage.error { color: #e3a49b; }
+.agent-console .agent-storage-error { padding: 8px 14px; font-size: 12px; line-height: 1.6; color: #e3a49b; border-bottom: 1px solid #553a35; }
+@media (max-width: 650px) { .session-storage > span { display: none; } }
+.app-shell[data-motion=off] *, .app-shell[data-motion=off] *::before, .app-shell[data-motion=off] *::after, .app-shell[data-motion=off] dialog::backdrop {
+  animation: none !important; transition: none !important; scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after, dialog::backdrop { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}

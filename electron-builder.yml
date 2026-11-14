@@ -13,6 +13,7 @@ files:
   - desktop/main.cjs
   - desktop/preload.cjs
   - desktop/resources.cjs
+  - desktop/appearance.cjs
   - desktop/assets/icon.ico
   - package.json
 extraResources:

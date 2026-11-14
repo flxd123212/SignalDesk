@@ -1,11 +1,11 @@
 # Windows 发行与验证
 
-适用版本：SignalDesk 0.1.2 / Windows x64，2026-11-15。
+适用版本：SignalDesk 0.1.5 / Windows x64，2026-11-15。
 
 ## 分发文件
 
-- `release/SignalDesk-Setup-0.1.2-x64.exe`：中文安装向导，当前用户安装，可选择安装目录，创建桌面与开始菜单快捷方式，包含卸载程序。
-- `release/SignalDesk-Portable-0.1.2-x64.exe`：单文件自解压运行，不要求安装 Node.js；用户数据使用与安装版相同的 SignalDesk 用户目录。它不是将用户数据保存在 EXE 旁的 U 盘模式。
+- `release/SignalDesk-Setup-0.1.5-x64.exe`：中文安装向导，当前用户安装，可选择安装目录，创建桌面与开始菜单快捷方式，包含卸载程序。
+- `release/SignalDesk-Portable-0.1.5-x64.exe`：单文件自解压运行，不要求安装 Node.js；用户数据使用与安装版相同的 SignalDesk 用户目录。它不是将用户数据保存在 EXE 旁的 U 盘模式。
 - `release/win-unpacked/`：未压缩的完整程序目录，供开发验证；只拿走其中 EXE 将不能运行。
 
 ## 运行资源
@@ -29,8 +29,14 @@ MCP/CLI 配置由界面生成：命令使用当前 EXE，环境包含 `ELECTRON_
 
 可设置 `SIGNALDESK_TEST_EXE` 指向安装后的 `SignalDesk.exe` 复用此验证。
 
+`npm run test:agent-restart` 使用隔离用户目录连续启动桌面三次，验证系统加密、API Key、多个会话、完整工具上下文、清除密钥/记录及关闭最后一个窗口时的保存。设置 `SIGNALDESK_TEST_EXE` 可对打包 EXE 运行相同检查。测试使用本机模型夹具，不消耗真实 API 配额。
+
 免安装启动器不转发 Node inspector 管道，直接对它运行 `test:package` 会超时；使用 `node tests/portable-smoke.mjs` 经本机临时 Chromium 调试端口验证自解压、波形、设置写入与关闭退出。该测试不修改实际用户数据，也不访问正在运行的用户工作区。
 
-安装器已在本机以当前用户方式安装到 `%LOCALAPPDATA%/Programs/SignalDesk`，退出码 0；桌面及开始菜单快捷方式均指向安装的 `SignalDesk.exe`。安装目录的前端入口 SHA256 与构建产物一致，安装后的 EXE 已通过 `test:package`。两个发行 EXE 的 SHA256 和大小记录在 `release/release-manifest.json` 与 `release/SHA256SUMS.txt`。
+`npm run test:appearance` 使用隔离用户目录验证本地背景保存、原生 IPC 边界、主题与关闭启动动画偏好的重启恢复，支持同样的 `SIGNALDESK_TEST_EXE` 参数。背景由测试生成，不读取用户图片。
+
+此前 0.1.2 安装器已在本机以当前用户方式安装到 `%LOCALAPPDATA%/Programs/SignalDesk`，退出码 0；桌面及开始菜单快捷方式均指向安装的 `SignalDesk.exe`。0.1.3 构建时旧版正在使用，因此未自动覆盖安装或关闭用户会话；应正常退出旧版后运行新版安装器。两个发行 EXE 的 SHA256 和大小记录在 `release/release-manifest.json` 与 `release/SHA256SUMS.txt`，当次验证结果见 `docs/VALIDATION.md`。
 
 未提供代码签名、自动更新服务或 ARM64 发行包。安装成功和软件回归通过不代表已实测全部 MCU、下载器或高波特率物理链路。
+
+0.1.5 的安装包与免安装包通过 GitHub Releases 分发；发布过程不自动覆盖本机已有安装。主题背景与动画偏好保存在本机，API 配置与会话继续使用 0.1.4 引入的加密恢复机制。从更早的未持久化版本首次升级时，需要填写一次旧版从未保存的 API Key。

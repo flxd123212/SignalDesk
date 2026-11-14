@@ -2,14 +2,17 @@ import { EventEmitter } from 'node:events';
 import { randomUUID } from 'node:crypto';
 import { AgentService } from './agent.mjs';
 import { projectCommand } from '../project-setup.mjs';
+import { AgentStore } from './storage.mjs';
 
 export class AgentRegistry extends EventEmitter {
   constructor(hub, defaultRoot, historyDirectory = '', toolDefaults = {}) {
     super(); this.hub = hub; this.defaultRoot = defaultRoot; this.historyDirectory = historyDirectory; this.toolDefaults = toolDefaults; this.sessions = new Map(); this.selected = new Map(); this.deviceId = hub.activeId;
     this.ensure();
     hub.on('state', () => {
-      for (const [id, entry] of this.sessions) if (!hub.devices.has(entry.device)) { entry.agent.dispose(); this.sessions.delete(id); }
+      let removed = false;
+      for (const [id, entry] of this.sessions) if (!hub.devices.has(entry.device)) { entry.agent.dispose(); this.sessions.delete(id); this.selected.delete(entry.device); removed = true; }
       if (this.deviceId !== hub.activeId) { this.deviceId = hub.activeId; this.ensure(); this.changed(); }
+      else if (removed) this.changed();
     });
     return new Proxy(this, { get: (registry, key) => {
       if (key in registry) { const value = Reflect.get(registry, key); return typeof value === 'function' ? value.bind(registry) : value; }
@@ -21,11 +24,12 @@ export class AgentRegistry extends EventEmitter {
   create({ name = '新会话', parent = '', readOnly = false, external = false } = {}) {
     return this.createForDevice(this.hub.activeId, { name, parent, readOnly, external });
   }
-  createForDevice(device, { name = '主会话', parent = '', readOnly = false, external = false } = {}) {
+  createForDevice(device, { name = '主会话', parent = '', readOnly = false, external = false, id = randomUUID() } = {}) {
     const existing = [...this.sessions.values()].filter(entry => entry.device === device);
     if (existing.length >= 12) throw new Error('每个设备最多 12 个会话，请关闭不用的会话');
     const entry = this.hub.devices.get(device), root = entry.projectRoot || this.defaultRoot;
-    const agent = new AgentService(entry.engine, root, { historyDirectory: this.historyDirectory }), id = randomUUID(); agent.readOnly = readOnly;
+    const agent = new AgentService(entry.engine, root, { historyDirectory: this.historyDirectory }); agent.readOnly = readOnly;
+    agent.storageStatus = () => this.store?.status || null;
     agent.config = { ...agent.config, ...this.toolDefaults, ...entry.toolchainConfig };
     if (existing.length) agent.config = { ...existing[0].agent.config };
     this.sessions.set(id, { id, device, name: String(name).slice(0, 40), parent, readOnly, external, agent });
@@ -39,7 +43,51 @@ export class AgentRegistry extends EventEmitter {
     if (!this.active) return null;
     return { ...this.active.agent.state(), sessionId: this.active.id, readOnly: this.active.readOnly, deviceId: this.hub.activeId, sessions: [...this.sessions.values()].filter(entry => entry.device === this.hub.activeId).map(entry => ({ id: entry.id, name: entry.name, parent: entry.parent, readOnly: entry.readOnly, busy: entry.agent.busy, messages: entry.agent.messages.length })) };
   }
-  changed() { this.emit('state', this.state()); }
+  changed() {
+    if (this.closing) return;
+    if (this.store && !this.restoring) this.store.schedule(encrypted => this.savedState(encrypted));
+    this.emit('state', this.state());
+  }
+  savedState(encrypted) {
+    const sessions = [...this.sessions.values()].map(({ agent, ...entry }) => ({ ...entry, state: agent.savedState(encrypted) }));
+    const data = { version: 1, selected: Object.fromEntries(this.selected), sessions };
+    if (encrypted) return data;
+    let text = JSON.stringify(data);
+    for (const { agent } of this.sessions.values()) if (agent.config.apiKey) text = text.split(JSON.stringify(agent.config.apiKey).slice(1, -1)).join('[REDACTED]');
+    return JSON.parse(text);
+  }
+  async restore(filename, encryption) {
+    this.store = new AgentStore(filename, encryption); this.restoring = true;
+    this.store.on('status', () => { if (!this.closing && !this.restoring) this.emit('state', this.state()); });
+    const saved = await this.store.load();
+    if (saved) {
+      const records = saved.data.sessions.filter(entry => typeof entry.id === 'string' && /^[\da-f-]{36}$/.test(entry.id) && this.hub.devices.has(entry.device));
+      for (const entry of this.sessions.values()) entry.agent.dispose();
+      this.sessions.clear(); this.selected.clear();
+      for (const record of records) {
+        if (this.sessions.has(record.id)) continue;
+        try {
+          const id = this.createForDevice(record.device, { id: record.id, name: record.name, parent: typeof record.parent === 'string' ? record.parent : '', readOnly: record.readOnly === true || record.external === true, external: record.external === true });
+          const agent = this.sessions.get(id).agent;
+          if (record.state.root === agent.workspace.root) await agent.restoreState(record.state, saved.encrypted);
+          else { await agent.configure({ ...record.state.config, apiKey: saved.encrypted ? record.state.config?.apiKey || '' : '' }); agent.message('assistant', '工程目录已变化，API 设置已恢复，旧工程上下文未带入。', 'status'); }
+        } catch { this.restoreWarning = '部分会话未能恢复，请检查对应工程和接口设置。'; }
+      }
+      for (const device of this.hub.devices.keys()) {
+        const entries = [...this.sessions.values()].filter(entry => entry.device === device);
+        const selected = saved.data.selected?.[device];
+        if (entries.length) this.selected.set(device, entries.some(entry => entry.id === selected) ? selected : entries.find(entry => !entry.parent)?.id || entries[0].id);
+      }
+    }
+    this.ensure(); this.restoring = false;
+    if (!this.store.blocked) this.changed();
+  }
+  async flush() { if (this.store) await this.store.flush(); }
+  async shutdown() {
+    this.closing = true;
+    this.dispose();
+    if (this.store) { this.store.schedule(encrypted => this.savedState(encrypted)); await this.store.flush().catch(() => {}); }
+  }
   select(id) { const entry = this.sessions.get(id); if (!entry || entry.device !== this.hub.activeId) throw new Error('会话不属于当前设备'); this.selected.set(entry.device, id); this.changed(); }
   closeSession(id) {
     const entry = this.sessions.get(id), others = [...this.sessions.values()].filter(item => item.device === this.hub.activeId && item.id !== id);
@@ -67,6 +115,7 @@ export class AgentRegistry extends EventEmitter {
     if (bound.projectProfile) bound.projectProfile.buildCommand = projectCommand(active.config);
     const { baseUrl, model, apiStyle, apiKey, maxOutputTokens, timeoutSeconds, thinkingMode, reasoningEffort, ...toolchainConfig } = active.config; bound.toolchainConfig = toolchainConfig;
     this.hub.emitState(); this.changed();
+    await this.flush();
     return active.publicConfig();
   }
   async delegate({ task, includeLogs = false, mode = 'ai' }) {
@@ -86,8 +135,8 @@ export class AgentRegistry extends EventEmitter {
     this.delegation = Promise.allSettled(children.map(async ({ child, role }) => {
       try { await child.agent.run({ mode, includeLogs, message: `以${role}角色执行只读分析：${task}。可以读取项目与当前数据；不要提议写入或发送命令，输出证据、风险和下一步验证。` }); }
       finally {
-        const result = child.agent.messages.filter(message => message.role === 'assistant').at(-1)?.content || '无分析结果';
-        parent.agent.message('assistant', `[子代理：${role}]\n${result}`, mode);
+        const result = child.agent.messages.filter(message => message.role === 'assistant').at(-1);
+        parent.agent.receiveDelegation({ sessionId: child.id, name: role, task, status: child.agent.progress.phase, content: result?.content || '无分析结果', mode, provenance: result?.provenance });
       }
     }));
     this.changed(); return this.state();

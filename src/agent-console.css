@@ -11,13 +11,14 @@
 .ide-shell .agent-console .agent-session-bar > select { width: 160px; min-width: 0; max-width: 200px; height: 26px; background: transparent; border-color: transparent; color: #aeb9bf; font: 11px var(--mono); }
 .agent-console .agent-session-bar .icon-button { width: 24px; height: 24px; }
 .agent-console:not(.agent-options-open) .agent-session-bar > .quiet-button,
-.agent-console:not(.agent-options-open) .agent-session-bar > .icon-button:last-child { display: none; }
+.agent-console:not(.agent-options-open) .agent-session-bar > .icon-button[aria-label="停止全部 Agent"] { display: none; }
 .ide-shell .agent-console .agent-project-context { padding: 7px 14px; border-color: var(--console-line); background: #15191c; font: 11px/1.6 var(--mono); }
 .agent-console .agent-conversation { background: var(--console-bg); }
 .ide-shell .agent-console .agent-controls { background: #161b1e; padding: 7px 12px; border-color: var(--console-line); font-size: 11px; }
 .agent-console .console-commandbar { display: flex; align-items: center; flex-wrap: wrap; gap: 7px; padding: 6px 12px; border-bottom: 1px solid var(--console-line); }
 .ide-shell .agent-console .agent-quick-actions { display: flex; flex-wrap: nowrap; gap: 2px; padding: 0; }
 .ide-shell .agent-console .agent-quick-actions .icon-button { width: 27px; height: 27px; padding: 0; border: 0; color: #96a6ae; }
+.ide-shell .agent-console.agent-page .agent-quick-actions > button:nth-child(3) { display: inline-flex; }
 .ide-shell .agent-console .agent-task-row { display: flex; flex: 1; flex-wrap: wrap; gap: 6px; padding: 0; border: 0; min-width: 0; }
 .ide-shell .agent-console .agent-task-row > select { width: 130px; max-width: 150px; flex: 0 1 150px; min-width: 105px; height: 27px; font-size: 11px; background: #191e21; border-color: #2b3338; }
 .agent-console .agent-task-row > .quiet-button { font-size: 11px; height: 27px; border-color: transparent; color: #a2b0b7; padding: 0 7px; }
@@ -34,6 +35,21 @@
 .ide-shell .agent-console .agent-message { padding: 14px 0 17px; border: 0; }
 .agent-console .message-meta { font: 10px var(--mono); gap: 8px; margin-bottom: 7px; color: #83959e; }
 .agent-console .message-meta b { font-weight: 400; }
+.agent-console .agent-call-details { min-width: 0; margin: 8px 0 0 20px; color: #8b9ca5; font: 10px/1.7 var(--mono); }
+.agent-console .agent-call-details summary { display: flex; align-items: center; flex-wrap: wrap; gap: 5px 12px; cursor: pointer; overflow-wrap: anywhere; }
+.agent-console .agent-call-details summary:hover, .agent-console .agent-call-details summary:focus-visible { color: #c8d7de; }
+.agent-console .agent-call-details summary svg { flex: none; }
+.agent-console .agent-call-details .call-model-different { color: #d4b982; }
+.agent-console .agent-call-details[open] { border-left: 1px solid #364249; padding-left: 10px; }
+.agent-console .agent-call-heading { display: flex; align-items: center; gap: 8px; margin-top: 9px; color: #b7c8d1; }
+.agent-console .agent-call-heading .icon-button { width: 24px; height: 24px; }
+.agent-console .agent-call-details dl { margin: 5px 0; }
+.agent-console .agent-call-details dl > div { display: grid; grid-template-columns: 115px minmax(0, 1fr); gap: 8px; padding: 2px 0; }
+.agent-console .agent-call-details dd { margin: 0; color: #becad0; overflow-wrap: anywhere; }
+.agent-console .agent-call-details p { margin: 8px 0 0; font: inherit; overflow-wrap: anywhere; }
+.agent-console .agent-message.tool .agent-call-details { flex: 1 0 calc(100% - 20px); margin-top: 0; }
+.agent-console .agent-context-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 3px 12px; border-bottom: 1px solid var(--console-line); color: #92a39c; font: 10px/1.7 var(--mono); }
+.agent-console .agent-context-bar .icon-button { width: 26px; height: 26px; flex: none; }
 .agent-console .console-marker { width: 12px; color: var(--accent); font-size: 14px; }
 .agent-console .message-meta time { color: #66757d; font: 10px var(--mono); margin-left: 7px; }
 .ide-shell .agent-console .message-content { font: 13px/1.85 var(--mono); color: #d1d7db; padding-left: 20px; }
@@ -48,6 +64,54 @@
 .agent-console .agent-message.tool .console-marker { color: #7f9a89; }
 .ide-shell .agent-console .agent-message.error .message-content, .agent-console .agent-message.error .console-marker { color: #e3a49b; }
 .agent-console .console-prose { white-space: pre-wrap; overflow-wrap: anywhere; }
+.agent-console .agent-message.tool .message-content { flex: 1; min-width: 0; }
+.agent-tool-event { min-width: 0; color: #a9bbb2; }
+.agent-tool-event > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; min-height: 27px; padding: 2px 4px; border-radius: 3px; }
+.agent-tool-event > summary:hover { background: #ffffff07; }
+.agent-tool-event > summary svg { flex: none; }
+.agent-tool-event > summary small { color: #78948a; font-size: 10px; }
+.agent-tool-event > summary time { margin-left: auto; font: 10px var(--mono); color: #7f9099; }
+.agent-tool-event.error > summary, .agent-tool-event.error > summary small { color: #e3a49b; }
+.agent-tool-event.running > summary { color: var(--accent); }
+.tool-event-body { margin: 4px 0 8px 9px; padding: 0 12px 10px; border-left: 1px solid #3b4b45; }
+.tool-event-title { display: flex; align-items: center; justify-content: space-between; color: #82989f; font-size: 10px; }
+.tool-event-title > code { overflow-wrap: anywhere; }
+.tool-event-title .icon-button { width: 25px; height: 25px; }
+.tool-event-section > b { font: 10px var(--mono); color: #8d9ca6; }
+.tool-event-section > pre { margin: 5px 0 10px; max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #bbc9d4; font: 11px/1.65 var(--mono); }
+.tool-source-links { display: flex; flex-wrap: wrap; gap: 5px 12px; }
+.tool-source-links > button { color: #9fc8e6; min-width: 0; max-width: 100%; padding: 4px 0; font: 11px var(--mono); }
+.tool-source-links > button > span { overflow: hidden; text-overflow: ellipsis; }
+.agent-task-plan { flex: none; padding: 5px 14px; border-bottom: 1px solid #293530; background: #151b19; }
+.agent-task-plan > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; color: #a7bdb2; min-height: 24px; font-size: 11px; }
+.agent-task-plan > summary small { margin-left: auto; color: #92a7a0; font: 10px var(--mono); }
+.task-plan-body { display: flex; align-items: flex-start; gap: 6px; }
+.task-plan-body > ol { list-style: none; margin: 4px 0 5px; padding: 0; max-height: 145px; overflow: auto; flex: 1; }
+.task-plan-body li { display: flex; align-items: baseline; gap: 8px; min-height: 26px; color: #9baab0; font: 11px/1.6 var(--mono); }
+.task-plan-body li > svg { flex: none; align-self: center; }
+.task-plan-body li > span { flex: 1; overflow-wrap: anywhere; }
+.task-plan-body li > small { flex: none; color: #7d9290; font-size: 10px; }
+.task-plan-body li.in_progress { color: var(--accent); }
+.task-plan-body li.completed { color: #8baba0; }
+.task-plan-body > .icon-button { width: 24px; height: 24px; }
+.agent-history-search { display: flex; align-items: center; gap: 8px; padding: 5px 14px; border-bottom: 1px solid #2b3338; }
+.agent-history-search > input { flex: 1; min-width: 0; height: 27px; font-size: 11px; }
+.agent-history-search > span { flex: none; font: 10px var(--mono); color: #859a9d; }
+.agent-toolbox { width: min(760px, calc(100vw - 32px)); max-height: calc(100dvh - 48px); padding: 0; border: 1px solid #485a60; border-radius: 6px; background: #171c20; color: var(--text); box-shadow: 0 24px 70px #0008; }
+.agent-toolbox[open] { display: flex; flex-direction: column; }
+.agent-toolbox::backdrop { background: #0008; }
+.agent-toolbox > header { display: flex; gap: 9px; align-items: center; padding: 12px 16px; border-bottom: 1px solid #313e43; }
+.agent-toolbox h3 { margin: 0; font-size: 14px; font-weight: 500; }
+.agent-toolbox > header > span { margin-left: auto; font: 11px var(--mono); color: #8ca29d; }
+.agent-toolbox-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: auto; padding: 0 16px 12px; gap: 0 24px; }
+.agent-toolbox-list > div { padding: 15px 0; min-width: 0; border-bottom: 1px solid #2a3538; }
+.agent-toolbox-list > div > div { display: flex; flex-wrap: wrap; gap: 6px; justify-content: space-between; align-items: center; }
+.agent-toolbox-list b { font-size: 12px; font-weight: 500; color: #ccdbd7; }
+.agent-toolbox-list small { display: inline-flex; align-items: center; gap: 4px; font-size: 10px; color: #94baa8; }
+.agent-toolbox-list p { font-size: 11px; line-height: 1.6; color: #9cabb4; margin: 7px 0 5px; }
+.agent-toolbox-list code { font: 10px var(--mono); color: #7494b0; overflow-wrap: anywhere; }
+.agent-toolbox-list .unavailable small { color: #c2aa82; }
+@media (max-width: 650px) { .agent-toolbox-list { grid-template-columns: minmax(0, 1fr); } .agent-toolbox-list > div { padding: 10px 0; } }
 .agent-console .console-prose > code { color: #e0c991; background: #ffffff07; padding: 1px 4px; border-radius: 2px; }
 .agent-console .console-prose > strong { color: #e7ecee; font-weight: 600; }
 .agent-console .agent-working { padding: 13px 0 7px; margin-top: 6px; font: 10px/1.7 var(--mono); color: #8aa999; }

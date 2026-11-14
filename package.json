@@ -1,6 +1,6 @@
 {
   "name": "signaldesk",
-  "version": "0.1.2",
+  "version": "0.1.5",
   "description": "SignalDesk embedded development and instrumentation workbench",
   "author": "SignalDesk",
   "private": true,
@@ -21,6 +21,8 @@
     "package:win": "npm run icon && npm run build && electron-builder --win --x64 --publish never",
     "package:dir": "npm run icon && npm run build && electron-builder --dir --win --x64 --publish never",
     "test:desktop": "node tests/desktop-smoke.mjs",
+    "test:agent-restart": "node tests/agent-desktop-storage.mjs",
+    "test:appearance": "node tests/appearance-desktop.mjs",
     "test:package": "node tests/package-smoke.mjs"
   },
   "dependencies": {

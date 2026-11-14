@@ -20,8 +20,11 @@ export const AI_PROVIDERS = [
   { id: 'lmstudio', name: 'LM Studio 本地', baseUrl: 'http://127.0.0.1:1234/v1', apiStyle: 'chat', model: '' },
 ];
 
+export const DEEPSEEK_MODELS = [{ id: 'deepseek-flash', name: 'DeepSeek Flash' }, { id: 'deepseek-v4-pro', name: 'DeepSeek V4 Pro' }];
+export const DEEPSEEK_API_BASES = { chat: 'https://api.deepseek.com', responses: 'https://api.deepseek.com', anthropic: 'https://api.deepseek.com/anthropic' };
+
 export function supportsDeepSeekThinking(config) {
-  try { return config.apiStyle === 'chat' && new URL(config.baseUrl).hostname === 'api.deepseek.com'; }
+  try { return Object.hasOwn(DEEPSEEK_API_BASES, config.apiStyle) && new URL(config.baseUrl).hostname === 'api.deepseek.com'; }
   catch { return false; }
 }
 
@@ -47,8 +50,8 @@ export function protocolProblem(baseUrl, apiStyle) {
   let url;
   try { url = new URL(baseUrl); } catch { return 'Base URL 不是有效地址'; }
   if (url.hostname === 'api.deepseek.com') {
-    const expected = url.pathname.startsWith('/anthropic') ? 'anthropic' : 'chat';
-    if (apiStyle !== expected) return `DeepSeek 此地址需要 ${expected === 'chat' ? 'Chat Completions' : 'Anthropic Messages'} 格式，不是 ${apiStyle}`;
+    const expected = url.pathname.startsWith('/anthropic') ? ['anthropic'] : ['chat', 'responses'];
+    if (!expected.includes(apiStyle)) return `DeepSeek 此地址需要 ${expected[0] === 'anthropic' ? 'Anthropic Messages' : 'Chat Completions 或 OpenAI Responses'} 格式；Anthropic 地址使用 /anthropic`;
   }
   if (url.hostname === 'api.anthropic.com' && apiStyle !== 'anthropic') return 'Anthropic 官方地址需要 Anthropic Messages 格式';
   if (url.hostname === 'generativelanguage.googleapis.com') {
@@ -59,6 +62,6 @@ export function protocolProblem(baseUrl, apiStyle) {
 }
 
 export function providerFor(baseUrl) {
-  try { const normalized = normalizeBaseUrl(baseUrl); return AI_PROVIDERS.find(item => normalizeBaseUrl(item.baseUrl) === normalized)?.id || 'custom'; }
+  try { const normalized = normalizeBaseUrl(baseUrl), url = new URL(normalized); if (url.hostname === 'api.deepseek.com' && ['', '/', '/v1', '/anthropic/v1'].includes(url.pathname)) return 'deepseek'; return AI_PROVIDERS.find(item => normalizeBaseUrl(item.baseUrl) === normalized)?.id || 'custom'; }
   catch { return 'custom'; }
 }

@@ -59,6 +59,11 @@ test('external permissions deny writes by default, enable audited edits explicit
   const result = (await external.call(header, { tool: 'write_project_file', arguments: change })).result;
   assert.equal(result.status, 'applied'); assert.ok(result.backup); assert.match(result.diff, /\+int x = 2/);
   external.update({ id: created.connection.id, permissions: ['read'] });
+  assert.ok(external.tools(header).some(tool => tool.name === 'read_firmware_lines'));
+  assert.ok(!external.tools(header).some(tool => tool.name === 'propose_source_patch'));
+  assert.ok(!external.tools(header).some(tool => tool.name === 'get_serial_logs'));
+  const lines = (await external.call(header, { tool: 'read_firmware_lines', arguments: { path: 'main.c', startLine: 1, endLine: 1 } })).result;
+  assert.equal(lines.lines[0].text, 'int x = 2;');
   await assert.rejects(external.call(header, { tool: 'submit_advice', arguments: { message: 'not allowed' } }), error => error.status === 403);
   external.update({ id: created.connection.id, revoke: true }); assert.throws(() => external.tools(header), error => error.status === 401);
   assert.doesNotMatch(JSON.stringify(logs.list()), new RegExp(created.token));

@@ -1,7 +1,11 @@
 import { API_STYLES, aiDefaults, normalizeBaseUrl, protocolProblem, supportsDeepSeekThinking } from '../../shared/ai-providers.mjs';
 
 export function toResponsesInput(messages) {
-  return messages.filter(message => message.role !== 'system').map(message => ({ role: message.role, content: message.content }));
+  return messages.filter(message => message.role !== 'system').flatMap(message => {
+    if (message.responseOutput) return message.responseOutput;
+    if (message.role === 'tool') return [{ type: 'function_call_output', call_id: message.tool_call_id, output: message.content }];
+    return [{ role: message.role, content: message.content }];
+  });
 }
 
 const redact = (value, config) => String(value).replaceAll(config.apiKey || '\0', '[redacted]').slice(0, 1000);
@@ -43,7 +47,7 @@ async function requestJson(endpoint, config, options, signal, fetcher) {
       if (after !== null) { const delay = /^\d+(\.\d+)?$/.test(after.trim()) ? Number(after) * 1000 : Date.parse(after) - Date.now(); if (Number.isFinite(delay)) error.retryAfterMs = Math.max(0, delay); }
       throw error;
     }
-    return data;
+    return { data, requestId: safeField(response.headers.get('x-request-id') || response.headers.get('request-id') || response.headers.get('x-goog-request-id'), config) };
   } catch (error) {
     if (signal?.aborted) throw new Error('分析已停止');
     if (timeout.aborted || error.name === 'TimeoutError') throw new Error(`AI 接口超时（${seconds}s），串口采集仍在继续`);
@@ -54,6 +58,9 @@ async function requestJson(endpoint, config, options, signal, fetcher) {
     throw safe;
   }
 }
+
+const safeField = (value, config) => typeof value === 'string' ? redact(value, config).replace(/[\x00-\x1f\x7f]/g, '').slice(0, 500) : '';
+const tokenCount = value => Number.isSafeInteger(value) && value >= 0 ? value : null;
 
 function anthropicMessages(messages) {
   const result = [];
@@ -88,7 +95,7 @@ export async function callModel({ config, messages, tools = [], responseInput, s
   let endpoint, body;
   if (style === 'responses') {
     endpoint = `${base}/responses`;
-    body = { model: config.model, instructions: system, input: responseInput || toResponsesInput(messages), store: false, include: ['reasoning.encrypted_content'], max_output_tokens: maxTokens, tools: tools.map(tool => ({ type: 'function', ...tool, strict: true })) };
+    body = { model: config.model, instructions: system, input: responseInput || toResponsesInput(messages), store: false, ...(deepseek ? {} : { include: ['reasoning.encrypted_content'] }), max_output_tokens: maxTokens, tools: tools.map(tool => ({ type: 'function', ...tool, strict: true })) };
   } else if (style === 'anthropic') {
     endpoint = `${base}/messages`;
     body = { model: config.model, system, max_tokens: maxTokens, messages: anthropicMessages(messages), ...(tools.length ? { tools: tools.map(tool => ({ name: tool.name, description: tool.description, input_schema: tool.parameters })) } : {}) };
@@ -97,24 +104,33 @@ export async function callModel({ config, messages, tools = [], responseInput, s
     body = { systemInstruction: { parts: [{ text: system }] }, contents: geminiMessages(messages), generationConfig: { maxOutputTokens: maxTokens }, ...(tools.length ? { tools: [{ functionDeclarations: tools.map(tool => ({ name: tool.name, description: tool.description, parametersJsonSchema: tool.parameters })) }] } : {}) };
   } else {
     endpoint = `${base}/chat/completions`;
-    body = { model: config.model, stream: false, messages: messages.map(({ anthropicContent, geminiParts, ...message }) => message), ...(new URL(base).hostname === 'api.openai.com' ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }), ...(tools.length ? { tools: tools.map(tool => ({ type: 'function', function: tool })), tool_choice: 'auto' } : {}) };
-    if (deepseek) {
-      const enabled = config.thinkingMode === 'enabled';
+    body = { model: config.model, stream: false, messages: messages.map(({ anthropicContent, geminiParts, responseOutput, ...message }) => message), ...(new URL(base).hostname === 'api.openai.com' ? { max_completion_tokens: maxTokens } : { max_tokens: maxTokens }), ...(tools.length ? { tools: tools.map(tool => ({ type: 'function', function: tool })), tool_choice: 'auto' } : {}) };
+  }
+  if (deepseek) {
+    const enabled = config.thinkingMode === 'enabled', effort = config.reasoningEffort || 'low';
+    if (style === 'responses') body.reasoning = { effort: enabled ? effort === 'max' ? 'xhigh' : effort : 'none' };
+    else if (style === 'anthropic') {
+      body.thinking = { type: enabled ? 'adaptive' : 'disabled' };
+      if (enabled) body.output_config = { effort };
+    } else {
       body.thinking = { type: enabled ? 'enabled' : 'disabled' };
-      if (enabled) body.reasoning_effort = config.reasoningEffort || 'low';
+      if (enabled) body.reasoning_effort = effort;
     }
   }
-  const data = await requestJson(endpoint, config, { method: 'POST', headers, body: JSON.stringify(body) }, signal, fetcher);
+  const started = Date.now();
+  const { data, requestId } = await requestJson(endpoint, config, { method: 'POST', headers, body: JSON.stringify(body) }, signal, fetcher);
   let result, reason, reasoningOnly = false;
   if (style === 'responses') {
     if (data.choices) throw new Error('返回的是 Chat Completions 结构，请将 API 格式切换为 Chat Completions');
     const output = Array.isArray(data.output) ? data.output : [];
     result = { content: output.filter(item => item.type === 'message').map(item => textContent(item.content)).join('\n'), toolCalls: output.filter(item => item.type === 'function_call').map(item => ({ id: item.call_id, name: item.name, arguments: item.arguments })), rawOutput: output };
     reason = data.incomplete_details?.reason || data.status;
+    reasoningOnly = !result.content.trim() && !result.toolCalls.length && output.some(item => item.type === 'reasoning');
   } else if (style === 'anthropic') {
     const content = Array.isArray(data.content) ? data.content : [];
     result = { content: textContent(content), toolCalls: content.filter(item => item.type === 'tool_use').map(item => ({ id: item.id, name: item.name, arguments: JSON.stringify(item.input) })), continuation: { anthropicContent: content } };
     reason = data.stop_reason;
+    reasoningOnly = !result.content.trim() && !result.toolCalls.length && content.some(item => item.type === 'thinking');
   } else if (style === 'gemini') {
     const candidate = data.candidates?.[0], parts = candidate?.content?.parts || [];
     result = { content: parts.filter(part => !part.thought && typeof part.text === 'string').map(part => part.text).join('\n'), toolCalls: parts.filter(part => part.functionCall).map((part, index) => ({ id: part.functionCall.id || `gemini-${index}`, name: part.functionCall.name, arguments: JSON.stringify(part.functionCall.args || {}) })), continuation: { geminiParts: parts } };
@@ -126,17 +142,28 @@ export async function callModel({ config, messages, tools = [], responseInput, s
     reason = data.choices?.[0]?.finish_reason;
     reasoningOnly = !result.content.trim() && !result.toolCalls.length && !!message?.reasoning_content;
   }
-  if (reasoningOnly && reason === 'length') throw new Error(`AI 推理达到输出上限（${maxTokens} tokens），仅返回 reasoning_content，尚未生成正文。${deepseek ? '在 AI 接口设置中选择“快速回答”，或提高输出上限并延长超时后重试' : '请提高输出上限后重试'}；本次未执行不完整的工具调用`);
-  if (!result.content.trim() && !result.toolCalls.length) throw new Error(`AI 未返回可用正文或工具调用（${style}，结束原因：${reason || '未知'}${reasoningOnly ? ' / 仅返回 reasoning_content' : ''}）。检查模型 ID、API 格式；推理模型可增加输出上限`);
-  if (result.toolCalls.some(call => !call.id || !call.name || typeof call.arguments !== 'string')) throw new Error('AI 工具调用结构不完整，未执行任何动作');
   const truncated = ['length', 'max_tokens', 'max_output_tokens', 'MAX_TOKENS'].includes(reason);
+  const reasoningField = style === 'chat' ? 'reasoning_content' : style === 'anthropic' ? 'thinking' : 'reasoning';
+  if (reasoningOnly && truncated) throw new Error(`AI 推理达到输出上限（${maxTokens} tokens），仅返回 ${reasoningField}，尚未生成正文。${deepseek ? '在 AI 接口设置中选择“快速回答”，或提高输出上限并延长超时后重试' : '请提高输出上限后重试'}；本次未执行不完整的工具调用`);
+  if (!result.content.trim() && !result.toolCalls.length) throw new Error(`AI 未返回可用正文或工具调用（${style}，结束原因：${reason || '未知'}${reasoningOnly ? ` / 仅返回 ${reasoningField}` : ''}）。检查模型 ID、API 格式；推理模型可增加输出上限`);
+  if (result.toolCalls.some(call => !call.id || !call.name || typeof call.arguments !== 'string')) throw new Error('AI 工具调用结构不完整，未执行任何动作');
   if (truncated && result.toolCalls.length) throw new Error(`AI 工具调用因输出上限被截断（${maxTokens} tokens），本轮工具未执行。请提高输出上限，或切换快速回答后重试`);
-  return { ...result, content: result.content + (truncated ? '\n\n[回复达到输出上限，内容可能不完整]' : ''), usage: data.usage || data.usageMetadata, endpoint, apiStyle: style, finishReason: reason };
+  const usage = data.usage || data.usageMetadata;
+  const inputParts = style === 'anthropic' ? [usage?.input_tokens, usage?.cache_read_input_tokens ?? 0, usage?.cache_creation_input_tokens ?? 0] : [usage?.prompt_tokens ?? usage?.input_tokens ?? usage?.promptTokenCount];
+  const provenance = {
+    requestedModel: safeField(config.model, config), reportedModel: safeField(style === 'gemini' ? data.modelVersion : data.model, config),
+    endpoint: redact(endpoint, config), apiStyle: style, responseId: safeField(data.id || data.responseId, config), requestId,
+    finishReason: safeField(reason, config), latencyMs: Date.now() - started, time: new Date().toISOString(),
+    inputTokens: inputParts.every(value => tokenCount(value) !== null) ? tokenCount(inputParts.reduce((sum, value) => sum + value, 0)) : null,
+    outputTokens: tokenCount(usage?.completion_tokens ?? usage?.output_tokens ?? usage?.candidatesTokenCount),
+  };
+  return { ...result, content: result.content + (truncated ? '\n\n[回复达到输出上限，内容可能不完整]' : ''), usage, endpoint, apiStyle: style, finishReason: reason, provenance };
 }
 
 export async function listModels(config, { signal, fetcher = fetch } = {}) {
-  const { base, headers } = connection(config);
-  const data = await requestJson(`${base}/models`, config, { method: 'GET', headers }, signal, fetcher);
+  const discoveryConfig = supportsDeepSeekThinking(config) ? { ...config, baseUrl: 'https://api.deepseek.com', apiStyle: 'chat' } : config;
+  const { base, headers } = connection(discoveryConfig);
+  const { data } = await requestJson(`${base}/models`, config, { method: 'GET', headers }, signal, fetcher);
   const entries = config.apiStyle === 'gemini' ? data.models : data.data;
   if (!Array.isArray(entries)) throw new Error('此接口未返回标准模型列表，请手动填写模型 ID');
   const models = entries.filter(item => config.apiStyle !== 'gemini' || item.supportedGenerationMethods?.includes('generateContent')).map(item => ({ id: String(item.id || item.name || '').replace(/^models\//, ''), name: String(item.display_name || item.displayName || item.id || item.name || '') })).filter(item => item.id && item.id.length <= 500).slice(0, 500);

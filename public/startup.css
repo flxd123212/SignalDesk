@@ -1,0 +1,66 @@
+html { background: #131719; }
+#signaldesk-startup {
+  --boot-accent: #73d8bb;
+  position: fixed; inset: 0; width: 100%; max-width: none; height: 100dvh; max-height: none;
+  box-sizing: border-box; margin: 0; padding: 0; border: 0; border-radius: 0;
+  color: #e2e9ed; background: #131719; overflow: auto;
+  font: 14px 'Segoe UI', 'Microsoft YaHei', sans-serif;
+}
+#signaldesk-startup:not([open]) { display: none; }
+#signaldesk-startup[open] { display: grid; grid-template-rows: 56px minmax(340px, 1fr) 64px; animation: none; }
+#signaldesk-startup::backdrop { background: #131719; animation: none; }
+#signaldesk-startup .boot-topline { display: flex; align-items: center; gap: 10px; padding: 0 28px; color: #80918e; font: 11px Consolas, monospace; border-bottom: 1px solid #222a2c; }
+#signaldesk-startup .boot-topline::before { content: ''; width: 7px; height: 7px; background: var(--boot-accent); }
+#signaldesk-startup .boot-topline span:last-child { margin-left: auto; }
+#signaldesk-startup[data-desktop=true] .boot-topline { padding-right: 152px; -webkit-app-region: drag; }
+#signaldesk-startup .boot-center { align-self: center; justify-self: center; width: min(580px, calc(100% - 40px)); text-align: center; padding: 36px 0; }
+#signaldesk-startup .boot-signal { width: 100%; height: auto; display: block; overflow: visible; color: var(--boot-accent); }
+#signaldesk-startup .boot-trace-base { fill: none; stroke: #2d3b3c; stroke-width: 1.3; }
+#signaldesk-startup .boot-trace { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-dasharray: 1; stroke-dashoffset: 1; animation: boot-trace-in 920ms cubic-bezier(.22,.68,.3,1) forwards; }
+#signaldesk-startup .boot-trace.secondary { color: #dfbd82; animation-delay: 140ms; }
+#signaldesk-startup .boot-chip { transform-origin: 290px 74px; animation: boot-chip-in 600ms cubic-bezier(.16,1,.3,1) both; }
+#signaldesk-startup .boot-chip-outline { fill: #1e2c2b; stroke: #50695f; }
+#signaldesk-startup .boot-pins { fill: none; stroke: #54605d; stroke-width: 2; }
+#signaldesk-startup .boot-logo { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+#signaldesk-startup .boot-label { fill: #7d9390; font: 9px Consolas, monospace; }
+#signaldesk-startup .boot-brand { margin: 20px 0 9px; color: #e9efef; font-size: 42px; font-weight: 600; line-height: 1.2; letter-spacing: 0; animation: boot-copy-in 550ms 100ms both; }
+#signaldesk-startup .boot-brand span { font-weight: 350; color: var(--boot-accent); }
+#signaldesk-startup .boot-subtitle { margin: 0; color: #91a29f; font-size: 14px; animation: boot-copy-in 550ms 180ms both; }
+#signaldesk-startup .boot-stages { display: flex; justify-content: center; flex-wrap: wrap; gap: 24px; padding: 0; margin: 42px 0 24px; list-style: none; color: #829390; font-size: 11px; }
+#signaldesk-startup .boot-stages li { display: flex; gap: 8px; align-items: center; transition: color 180ms ease; }
+#signaldesk-startup .boot-stages i { width: 6px; height: 6px; display: block; border: 1px solid #5c6b69; border-radius: 2px; }
+#signaldesk-startup .boot-stages li[data-done=true] { color: #c2d5ce; }
+#signaldesk-startup .boot-stages li[data-done=true] i { border-color: var(--boot-accent); background: var(--boot-accent); }
+#signaldesk-startup .boot-status { min-height: 23px; margin: 0; color: #b7c7c2; font-size: 12px; }
+#signaldesk-startup .boot-track { position: relative; overflow: hidden; width: min(260px, 80%); height: 2px; margin: 20px auto 0; background: #2b3635; }
+#signaldesk-startup .boot-track::after { content: ''; position: absolute; inset: 0; background: var(--boot-accent); transform: scaleX(.24); transform-origin: left; animation: boot-loading 1.6s ease-in-out infinite; }
+#signaldesk-startup[data-state=ready] .boot-track::after { animation: none; transform: scaleX(1); transition: transform 220ms ease; }
+#signaldesk-startup[data-state=stalled] .boot-track::after { animation: none; background: #dfbd82; }
+#signaldesk-startup .boot-footer { display: flex; align-items: center; gap: 12px; padding: 0 28px; border-top: 1px solid #222a2c; color: #7f9390; }
+#signaldesk-startup .boot-version { margin-right: auto; font: 11px Consolas, monospace; }
+#signaldesk-startup button { border: 1px solid #40504d; background: transparent; color: #bdcec8; border-radius: 4px; padding: 8px 14px; font: inherit; font-size: 12px; cursor: pointer; }
+#signaldesk-startup button:hover { border-color: var(--boot-accent); background: #202d2a; }
+#signaldesk-startup button:focus-visible { outline: 2px solid var(--boot-accent); outline-offset: 3px; }
+#signaldesk-startup [hidden] { display: none; }
+#signaldesk-startup[data-state=leaving] { pointer-events: none; animation: boot-dismiss 220ms ease-out forwards; }
+#signaldesk-startup[data-state=leaving]::backdrop { background: transparent; }
+#signaldesk-startup[data-state=leaving] .boot-center { animation: boot-center-out 220ms ease-out forwards; }
+@keyframes boot-trace-in { to { stroke-dashoffset: 0; } }
+@keyframes boot-chip-in { from { opacity: 0; transform: scale(.88); } to { opacity: 1; transform: scale(1); } }
+@keyframes boot-copy-in { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes boot-loading { 0% { transform: translateX(-25%) scaleX(.24); } 50% { transform: translateX(35%) scaleX(.4); } 100% { transform: translateX(105%) scaleX(.24); } }
+@keyframes boot-dismiss { to { opacity: 0; } }
+@keyframes boot-center-out { to { opacity: 0; transform: translateY(-8px); } }
+#signaldesk-startup[data-motion=off], #signaldesk-startup[data-motion=off] *, #signaldesk-startup[data-motion=off] *::after {
+  animation: none !important; transition: none !important;
+}
+#signaldesk-startup[data-motion=off] .boot-trace { stroke-dashoffset: 0; }
+@media (max-width: 600px) {
+  #signaldesk-startup .boot-brand { font-size: 34px; }
+  #signaldesk-startup .boot-stages { gap: 14px; margin-top: 30px; }
+  #signaldesk-startup .boot-footer, #signaldesk-startup .boot-topline { padding-left: 20px; padding-right: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  #signaldesk-startup, #signaldesk-startup *, #signaldesk-startup *::after { animation: none !important; transition: none !important; }
+  #signaldesk-startup .boot-trace { stroke-dashoffset: 0; }
+}

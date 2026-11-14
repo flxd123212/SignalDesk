@@ -48,14 +48,15 @@ export async function api<T = AppState>(url: string, body?: unknown): Promise<T>
 export function useDevice(onNotice: (message: string, error?: boolean) => void) {
   const [state, setState] = useState<AppState>(emptyState);
   const [online, setOnline] = useState(false);
+  const [ready, setReady] = useState(false);
   useEffect(() => {
     let socket: WebSocket, retry: ReturnType<typeof setTimeout>, disposed = false;
     const connect = () => {
       socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/stream`);
-      socket.onopen = () => { setOnline(true); dataStore.clear(); };
+      socket.onopen = () => { setOnline(true); dataStore.clear(); window.signaldeskBoot?.stage('workspace'); };
       socket.onmessage = event => {
         const message = JSON.parse(event.data);
-        if (message.type === 'state') setState(message.state);
+        if (message.type === 'state') { setState(message.state); setReady(true); }
         else if (message.type === 'ports') { setPortsState(message.state); window.dispatchEvent(new CustomEvent('signaldesk-port-change', { detail: message.state })); }
         else if (message.type === 'batch') dataStore.append(message.samples, message.packets);
         else if (message.type === 'reset') dataStore.clear();
@@ -77,7 +78,7 @@ export function useDevice(onNotice: (message: string, error?: boolean) => void) 
     connect();
     return () => { disposed = true; clearTimeout(retry); socket?.close(); };
   }, [onNotice]);
-  return { state, online };
+  return { state, online, ready };
 }
 
 export function useDataRevision() {

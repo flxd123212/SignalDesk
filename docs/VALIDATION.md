@@ -2,6 +2,35 @@
 
 日期：2026-11-15（Asia/Shanghai）。测试产物另带运行时间戳。
 
+## 0.1.5 动画与主题验证
+
+- `npm run build` 通过。动画、主题与背景、设置、独立窗口、Agent 终端及工具的 Playwright 专项共 11 项通过，本轮未重跑全部界面用例。
+- 启动页在主应用脚本加载前出现，进度跟随真实状态；模拟脚本延迟验证 12 秒超时后的恢复入口、Esc 退出、系统动态效果切换与独立窗口跳过。
+- 验证柔和/灵动、关闭动画、偏好重载、主题 HEX 校验、深色按钮前景色、图片保存/恢复/移除、无效文件保护、填充/遮罩/模糊及 390px 布局。波形页面切换保留暂停状态，继续后画布数据更新。
+- `node tests/desktop-smoke.mjs` 通过原生窗口、全屏/退出、波形、Agent、独立工作区和目录选择。`node tests/appearance-desktop.mjs` 实际重启桌面，验证 WebP 文件与主题恢复、非法图片/路径拒绝及按标识移除。
+- `node tests/agent-desktop-storage.mjs` 再次通过三次桌面启动，验证加密密钥、多会话、原生工具历史及最后窗口关闭后的保存，未使用真实 API Key。
+- 截图：`startup-desktop.png`、`startup-mobile.png`、`motion-settings.png`、`theme-background-settings.png`、`theme-background-workspace.png`、`theme-background-mobile.png`、`theme-desktop-restored.png`，位于忽略的 `artifacts/`。背景为测试生成图，模拟设备仅用于回归；产品默认仍离线。
+- 0.1.5 安装与免安装 EXE 已生成，ProductVersion 为 0.1.5.0。19 个桌面入口、背景模块及前端资源文件与构建产物哈希一致；发行文件 SHA256 已写入 `release/release-manifest.json` 与 `release/SHA256SUMS.txt`。
+- `npm run test:package` 通过干净目录启动、native 串口枚举、QuickJS/WASM、GLB、动态波形、共享工具窗口、CLI/MCP、设置重启及源码保留检查；对打包 EXE 运行 `tests/appearance-desktop.mjs`，背景文件、主题与动画偏好重启恢复同样通过。
+- `node tests/portable-smoke.mjs` 通过 0.1.5 单文件 EXE 的自解压、隔离用户目录、动态波形、设置持久化与正常关闭检查。本轮验证使用隔离目录，没有覆盖本机已有安装。
+
+## 0.1.4 Agent 工作区验证
+
+- `npm test`：146 项通过，0 跳过，覆盖加密存档、多个设备/会话恢复、密钥清除、上下文续接、只读外部会话、写入失败/损坏文件保护，以及新增项目工具、局部补丁与权限边界。
+- `npm run build` 通过。Agent 工具、终端、运行控制、接口设置、外观设置与独立窗口的 Playwright 专项共 6 项通过。验证工具结果与源码跳转、计划、搜索、390px 窄屏、动画关闭及系统减少动态效果；本轮未重跑全部界面测试。
+- `node tests/agent-desktop-storage.mjs` 在隔离用户目录实际启动 Electron 三次，通过系统加密保存、恢复 API Key、多个会话与原生工具历史、清除密钥/会话、关闭最后窗口等待保存、离线重启检查。使用本机 HTTP 模型夹具，不调用用户真实 API。
+- 新截图：`artifacts/agent-toolbox-desktop.png`、`agent-toolbox-mobile.png`、`agent-tools-results.png`、`agent-restored-desktop.png`、`agent-encrypted-settings.png`。截图中的模拟设备和测试 API 仅用于验证，产品仍默认离线启动。
+- 0.1.4 安装包和免安装包已生成。`npm run test:package` 通过原生串口模块、QuickJS、GLB、动态波形、多窗口、CLI/MCP、设置重启与用户源码保留检查；指定打包 EXE 的 `tests/agent-desktop-storage.mjs` 再次通过三次重启恢复验证；`node tests/portable-smoke.mjs` 通过自解压运行、设置写入和关闭退出。
+- EXE ProductVersion 为 0.1.4.0，13 个关键源码/前端资源文件与打包目录哈希一致，打包元数据版本一致。两份 EXE 校验值记录在 `release/SHA256SUMS.txt` 与 `release/release-manifest.json`。未覆盖现有安装，未上传新的 GitHub 发行版。
+
+## 0.1.3 Agent 更新验证
+
+- `npm test`：134 项通过，0 跳过；新增模型来源、四协议完整工具上下文、模型切换和上下文限额/重置测试，后续追加 DeepSeek 三种官方入口、思考参数、模型目录和子代理结果续接测试。
+- `npm run build` 通过；Agent 终端、运行恢复和接口设置专项 Playwright 共 3 项通过，覆盖桌面、IDE 分栏及 390px 窄屏。未在本轮重跑全部界面用例。
+- 新截图 `artifacts/agent-call-record-desktop.png` 使用本机 HTTP 夹具，显示请求别名与返回 ID 不同的场景。测试不消耗用户密钥，不能验证截图那次线上调用的底层模型。
+- `npm run package:win` 生成 0.1.3 安装包和免安装版。`npm run test:package` 在独立数据目录通过，额外验证打包后的模型来源记录、上下文重置、原生串口枚举、CLI/MCP、独立窗口与重启；`node tests/portable-smoke.mjs` 通过自解压、离线启动、波形、设置持久化与退出检查。
+- 打包 EXE ProductVersion 为 0.1.3.0；未覆盖用户原安装。两个发行文件的 SHA256 已写入 `release/SHA256SUMS.txt` 和 `release/release-manifest.json`。本轮生成的是本地发布产物，未上传新版本到 GitHub。
+
 ## 0.1.1 更新验证
 
 - 0.1.1 安装器退出码 0，实际安装 EXE 报告版本 0.1.1.0；桌面和开始菜单快捷方式目标正确，安装目录前端入口 SHA256 与最终构建一致。实际安装 EXE 的隔离打包回归通过，0.1.1 单文件免安装版实测通过。

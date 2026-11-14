@@ -126,7 +126,7 @@ test('alarm service monitors inactive devices, persists rules and exports acknow
   service.acknowledge(service.events[0].id); assert.equal(service.events[0].acknowledged, true);
   assert.match(await logs.export({ category: 'alarm' }), /报警已确认/);
   const store = new WorkspaceStore(path.join(directory, 'devices.json'), hub); store.save(); await store.queue;
-  const other = new DeviceHub({ directory }); t.after(() => other.dispose()); await new WorkspaceStore(store.filename, other).load(); assert.equal(other.devices.get(other.activeId).alarmRules.length, 1);
+  const other = new DeviceHub({ directory }); t.after(() => other.dispose()); await new WorkspaceStore(store.filename, other).load(); assert.equal(other.activeId, second); assert.equal(other.devices.get(first).alarmRules.length, 1);
 });
 
 test('external Agent access has no expiry and can disconnect/reconnect without changing the token', async t => {

@@ -31,7 +31,7 @@ import { discoverGcc } from './gcc.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-export async function startServer({ port = 4780, dev = false, autoDemo = false, directory = path.join(root, '.data', 'sessions'), examplesDirectory = path.join(root, 'firmware-examples'), listPorts = () => SerialPort.list(), Port = SerialPort } = {}) {
+export async function startServer({ port = 4780, dev = false, autoDemo = false, directory = path.join(root, '.data', 'sessions'), examplesDirectory = path.join(root, 'firmware-examples'), listPorts = () => SerialPort.list(), Port = SerialPort, agentEncryption = null } = {}) {
   const app = express(), server = http.createServer(app);
   const engine = new DeviceHub({ directory, Port });
   const discovery = new PortDiscovery(engine, listPorts);
@@ -41,6 +41,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   const chips = new ChipService(path.join(directory, '..', 'firmware'), engine);
   const detectedTools = await discoverToolchains();
   const agent = new AgentRegistry(engine, path.join(examplesDirectory, 'SignalGenerator'), path.join(directory, '..', 'changes'), detectedTools);
+  await agent.restore(path.join(directory, '..', 'agent-state.json'), agentEncryption);
   const logs = new EventLog(path.join(directory, '..', 'logs')); await logs.init();
   const alarms = new AlarmService(engine, logs);
   const commandQueues = new CommandQueues(engine, logs);
@@ -50,6 +51,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   const validation = new ProjectValidation(engine, agent, logs);
   if (workspace.failure) logs.write({ level: 'error', category: 'workspace', message: workspace.failure });
   for (const entry of agent.sessions.values()) if (entry.agent.config.apiKey) logs.secrets.add(entry.agent.config.apiKey);
+  if (agent.store.status.error || agent.restoreWarning) logs.write({ level: 'error', category: 'agent', message: agent.store.status.error || agent.restoreWarning });
   engine.on('state', () => workspace.save()); workspace.save();
   agent.on('audit', record => logs.write(record));
   engine.on('notice', notice => logs.write({ level: notice.level, category: 'device', device: engine.activeId, message: notice.message }));
@@ -214,7 +216,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.post('/api/ai/cancel-all', (_request, response) => { agent.cancelAll(); response.json(agent.state()); });
   app.get('/api/ai/changes', async (_request, response) => response.json(await agent.workspace.history()));
   app.get('/api/ai/changes/:id', async (request, response) => response.json(await agent.workspace.change(request.params.id)));
-  const checkAgentContext = input => { if (input.deviceId && input.deviceId !== engine.activeId) throw new Error('当前设备已切换'); if (input.root && input.root !== agent.workspace.root) throw new Error('当前工程已变化'); };
+  const checkAgentContext = input => { if (input.deviceId && input.deviceId !== engine.activeId) throw new Error('当前设备已切换'); if (input.sessionId && input.sessionId !== agent.active.id) throw new Error('当前会话已切换'); if (input.root && input.root !== agent.workspace.root) throw new Error('当前工程已变化'); };
   app.post('/api/ai/command/preview', (request, response) => { checkAgentContext(request.body); response.json(commandPlan(request.body.commandLine, agent.workspace.root)); });
   app.post('/api/ai/command/run', async (request, response) => {
     checkAgentContext(request.body);
@@ -230,14 +232,16 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
     if (sessionId && agent.active.readOnly) throw new Error('只读会话不能修改设置，请切换主会话');
     response.json(await agent.configure(config));
   });
-  app.post('/api/ai/test', async (_request, response) => response.json(await agent.testConnection()));
-  app.post('/api/ai/models', async (_request, response) => response.json(await agent.models()));
+  app.post('/api/ai/test', async (request, response) => { checkAgentContext(request.body); response.json(await agent.testConnection()); });
+  app.post('/api/ai/models', async (request, response) => { checkAgentContext(request.body); response.json(await agent.models()); });
   app.get('/api/ai/files', async (request, response) => { if (request.query.deviceId && request.query.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json(await agent.workspace.list()); });
   app.get('/api/ai/file', async (request, response) => { if (request.query.deviceId && request.query.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json(await agent.workspace.read(request.query.path)); });
   app.post('/api/ai/run', async (request, response) => { await agent.run(request.body); response.json(agent.state()); });
   app.post('/api/ai/retry', async (_request, response) => { await agent.retry(); response.json(agent.state()); });
   app.post('/api/ai/cancel', (_request, response) => { agent.cancel(); agent.changed(); response.json(agent.state()); });
   app.post('/api/ai/clear', (_request, response) => { agent.clear(); response.json(agent.state()); });
+  app.post('/api/ai/context/reset', (request, response) => { checkAgentContext(request.body); agent.resetContext(); response.json(agent.state()); });
+  app.post('/api/ai/plan/clear', (request, response) => { checkAgentContext(request.body); if (agent.busy) throw new Error('请先停止分析'); agent.active.agent.taskPlan = []; agent.changed(); response.json(agent.state()); });
   app.post('/api/ai/continuous', (request, response) => { if (request.body.active) agent.startContinuous(request.body); else { agent.stopContinuous(); agent.changed(); } response.json(agent.state()); });
   app.post('/api/ai/execute', async (request, response) => { await agent.execute(request.body.id); response.json(agent.state()); });
   app.post('/api/ai/reject', async (request, response) => { await agent.reject(request.body.id); response.json(agent.state()); });
@@ -322,11 +326,12 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   await discovery.start();
   if (autoDemo && engine.config.path === 'demo') await engine.connect(engine.config);
   console.log(`SignalDesk running at ${address}`);
-  const close = async () => {
+  let closing;
+  const close = () => closing ||= (async () => {
     await discovery.dispose();
-    clearInterval(flush); alarms.dispose(); agent.dispose(); automation.stop(); chips.stop(); await widgets.dispose(); await commandQueues.dispose(); await engine.dispose(); await automation.completion; for (const client of sockets.clients) client.terminate();
+    clearInterval(flush); alarms.dispose(); await agent.shutdown(); automation.stop(); chips.stop(); await widgets.dispose(); await commandQueues.dispose(); await engine.dispose(); await automation.completion; for (const client of sockets.clients) client.terminate();
     sockets.close(); await vite?.close(); await new Promise(resolve => server.close(resolve)); await validation.dispose(); await logs.queue; await workspace.queue;
-  };
+  })();
   return { address, close, engine, discovery };
 }
 

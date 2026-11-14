@@ -1,10 +1,19 @@
 interface Window {
+  signaldeskBoot?: {
+    stage(phase: 'interface' | 'service' | 'workspace', version?: string): void;
+    ready(): void;
+    configure(preferences: unknown): void;
+    preview(preferences: unknown): void;
+  };
   signaldeskDesktop?: {
     integratedTitlebar?: boolean;
     newWindow(): Promise<void>;
     closeWindow(): Promise<void>;
     nativeMenu(kind: 'edit' | 'view'): Promise<void>;
     savedPreferences?: unknown;
+    saveBackground(data: string): Promise<string>;
+    readBackground(id: string): Promise<string | null>;
+    removeBackground(id: string): Promise<void>;
     savePreferences(value: unknown): Promise<void>;
     onPreferences(callback: (value: unknown) => void): () => void;
     chooseDirectory(initial: string): Promise<string | null>;

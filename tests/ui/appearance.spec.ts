@@ -1,0 +1,73 @@
+import { test, expect } from '@playwright/test';
+
+test('custom colors and local background persist without storing image data in preferences', async ({ page }) => {
+  await page.goto('/');
+  await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
+  await page.keyboard.press('Control+,');
+  const settings = page.getByRole('dialog', { name: '设置', exact: true });
+  await settings.getByRole('button', { name: '主题与背景', exact: true }).click();
+  const color = settings.getByLabel('自定义主题色 HEX', { exact: true });
+  await color.fill('#123456'); await color.press('Tab');
+  await expect(page.locator('.app-shell')).toHaveCSS('--accent', '#123456');
+  await expect(page.locator('.app-shell')).toHaveCSS('--accent-ink', '#ffffff');
+  await color.fill('invalid'); await color.press('Tab');
+  await expect(settings.getByRole('alert')).toContainText('有效颜色');
+  await expect(page.locator('.app-shell')).toHaveCSS('--accent', '#123456');
+  await color.fill('#5c9ded'); await color.press('Tab');
+  await settings.getByLabel('背景类型', { exact: true }).selectOption('color');
+  const solid = settings.getByLabel('背景颜色 HEX', { exact: true });
+  await solid.fill('#263a38'); await solid.press('Tab');
+  await expect(page.locator('.workbench-background')).toHaveCSS('background-color', 'rgb(38, 58, 56)');
+  await settings.getByLabel('背景类型', { exact: true }).selectOption('image');
+  const fixture = await page.evaluate(() => {
+    const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 800;
+    const context = canvas.getContext('2d')!;
+    context.fillStyle = '#3d6365'; context.fillRect(0, 0, 1200, 800);
+    context.fillStyle = '#88736a'; context.fillRect(650, 0, 550, 800);
+    context.strokeStyle = '#c6d9c5'; context.lineWidth = 8;
+    for (let i = 0; i < 6; i++) { context.beginPath(); context.moveTo(0, 100 + i * 95); context.lineTo(300 + i * 45, 100 + i * 95); context.lineTo(430 + i * 45, 30 + i * 95); context.lineTo(1200, 30 + i * 95); context.stroke(); }
+    return canvas.toDataURL('image/png').split(',')[1];
+  });
+  await settings.getByLabel('上传背景图片', { exact: true }).setInputFiles({ name: 'local-background.png', mimeType: 'image/png', buffer: Buffer.from(fixture, 'base64') });
+  await expect(page.locator('.workbench-background > div')).toHaveCSS('background-image', /blob:/);
+  await settings.getByLabel('图片显示', { exact: true }).selectOption('contain');
+  await settings.getByLabel('背景模糊', { exact: true }).fill('3');
+  await settings.getByLabel('背景遮罩', { exact: true }).fill('40');
+  await expect(page.locator('.workbench-background > div')).toHaveCSS('filter', 'blur(3px)');
+  await expect(page.locator('.workbench-background > div')).toHaveCSS('background-size', 'contain');
+  await page.screenshot({ path: 'artifacts/theme-background-settings.png', animations: 'disabled' });
+  const saved = await page.evaluate(() => localStorage.getItem('signaldesk.preferences.v1')!);
+  expect(saved.length).toBeLessThan(2048); expect(saved).not.toContain('base64');
+  expect(JSON.parse(saved).backgroundImage).toMatch(/^[a-f0-9]{64}$/);
+  await settings.getByLabel('上传背景图片').setInputFiles({ name: 'invalid.svg', mimeType: 'image/svg+xml', buffer: Buffer.from('<svg/>') });
+  await expect(settings.getByRole('alert')).toContainText('PNG');
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('signaldesk.preferences.v1')!).backgroundImage)).toBe(JSON.parse(saved).backgroundImage);
+  await settings.getByRole('button', { name: '关闭设置', exact: true }).click();
+  await page.screenshot({ path: 'artifacts/theme-background-workspace.png', animations: 'disabled' });
+  await page.reload();
+  await expect(page.locator('.app-shell')).toHaveCSS('--accent', '#5c9ded');
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-background', 'image');
+  await expect(page.locator('.workbench-background > div')).toHaveCSS('background-image', /blob:/);
+  await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
+  await page.keyboard.press('Control+,'); await settings.getByRole('button', { name: '主题与背景', exact: true }).click();
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await settings.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await page.screenshot({ path: 'artifacts/theme-background-mobile.png', animations: 'disabled' });
+  await settings.getByRole('button', { name: '移除图片', exact: true }).click();
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-background', 'default');
+  await settings.getByRole('button', { name: '恢复默认主题', exact: true }).click();
+  await expect(page.locator('.app-shell')).toHaveCSS('--accent', '#73d8bb');
+  await page.reload();
+  await expect(page.locator('.workbench-background')).not.toBeVisible();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('signaldesk.preferences.v1')!).backgroundImage)).toBe('');
+});
+
+test('imported appearance preferences normalize invalid colors, paths and extreme values', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('signaldesk.preferences.v1', JSON.stringify({ accent: 'url(https://invalid/)', backgroundMode: 'image', backgroundImage: '../../file', backgroundColor: '#fff', backgroundDim: -50, backgroundBlur: 999, startupAnimation: false })));
+  await page.goto('/');
+  await expect(page.locator('.app-shell')).toHaveCSS('--accent', '#73d8bb');
+  await expect(page.locator('.workbench-background')).toHaveCSS('background-color', 'rgb(255, 255, 255)');
+  await expect(page.locator('.workbench-background > div')).toHaveCSS('background-image', 'none');
+  await expect(page.locator('.workbench-background > div')).toHaveCSS('filter', 'blur(12px)');
+  await expect(page.locator('.app-shell')).toHaveCSS('--background-dim', '0.2');
+});

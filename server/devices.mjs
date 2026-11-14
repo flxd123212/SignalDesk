@@ -15,11 +15,14 @@ export class DeviceHub extends EventEmitter {
   get active() { return this.devices.get(this.activeId).engine; }
   add(name = '', metadata = {}) {
     if (this.devices.size >= 8) throw new Error('最多同时打开 8 个设备');
-    const id = `device-${++this.sequence}`, engine = new SerialEngine(this.options);
+    const restoredId = typeof metadata.id === 'string' && /^device-[1-9]\d{0,8}$/.test(metadata.id) ? metadata.id : '';
+    if (restoredId && this.devices.has(restoredId)) throw new Error('设备标识重复');
+    const id = restoredId || `device-${++this.sequence}`, engine = new SerialEngine(this.options);
+    this.sequence = Math.max(this.sequence, Number(id.slice(7)));
     const label = String(name || `设备 ${this.sequence}`).slice(0, 40);
     if (metadata.config) { engine.config = metadata.config; engine.reset(); }
     engine.projectContext = metadata.projectProfile || null;
-    this.devices.set(id, { id, name: label, chip: '', board: '', portBinding: null, projectRoot: '', ...metadata, engine });
+    this.devices.set(id, { name: label, chip: '', board: '', portBinding: null, projectRoot: '', ...metadata, id, engine });
     for (const event of ['state', 'reset', 'packet', 'samples', 'notice']) engine.on(event, value => {
       if (event === 'state') this.emitState();
       else if (this.activeId === id) this.emit(event, value);

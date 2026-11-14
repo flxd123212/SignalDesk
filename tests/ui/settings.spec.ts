@@ -15,6 +15,10 @@ test('settings customize workspace, persist, import/export and render on small s
   await page.keyboard.press('Control+,');
   const settings = page.getByRole('dialog', { name: '设置', exact: true });
   await expect(settings).toBeVisible();
+  await expect(settings).toHaveCSS('animation-name', 'surface-enter');
+  await settings.getByLabel('界面动画', { exact: true }).uncheck();
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-motion', 'off');
+  await expect(settings).toHaveCSS('animation-name', 'none');
   await settings.getByLabel('串口发送栏显示方式').selectOption('hidden');
   await expect(page.locator('.context-sendbar')).not.toBeVisible();
   await settings.getByLabel('串口发送栏显示方式').selectOption('auto');
@@ -34,9 +38,14 @@ test('settings customize workspace, persist, import/export and render on small s
   await expect(settings.getByLabel('工程构建工具')).toBeVisible();
   await page.keyboard.press('Escape'); await expect(settings).toHaveCount(0);
   await page.goto('/'); await expect(page.locator('.editor-page')).toBeVisible();
+  await expect(page.locator('.app-shell')).toHaveAttribute('data-motion', 'off');
   await expect(page.getByRole('button', { name: 'CAN 分析', exact: true })).toBeVisible();
   await expect(page.locator('.app-shell')).toHaveCSS('--accent', '#87bfff');
   await page.getByRole('button', { name: '打开设置', exact: true }).click();
+  await settings.getByLabel('界面动画', { exact: true }).check();
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await expect(settings).toHaveCSS('animation-name', 'none');
+  await page.emulateMedia({ reducedMotion: 'no-preference' });
   await settings.getByLabel('导入偏好文件').setInputFiles({ name: 'prefs.json', mimeType: 'application/json', buffer: Buffer.from(JSON.stringify({ version: 1, preferences: { accent: '#73d8bb', favorites: [], editorSize: 16, apiKey: 'should-not-store' } })) });
   expect(await page.evaluate(() => localStorage.getItem('signaldesk.preferences.v1'))).not.toContain('should-not-store');
   await page.setViewportSize({ width: 390, height: 844 });

@@ -28,6 +28,8 @@ import type { Page } from './types';
 import { SettingsHub, type SettingsSection } from './SettingsHub';
 import { getPreferences, usePreferences } from './preferences';
 import { DeviceDiscovery } from './DeviceDiscovery';
+import { useSurfaceMotion } from './motion';
+import { accentInk, useBackground } from './appearance';
 
 const Graph = lazy(() => import('./Graph').then(module => ({ default: module.Graph })));
 const Commands = lazy(() => import('./CommandLibrary').then(module => ({ default: module.CommandLibrary })));
@@ -47,10 +49,14 @@ const initialPage = () => pages.find(item => item.id === new URLSearchParams(loc
 export default function App() {
   const [page, setPage] = useState<Page>(initialPage), [toast, setToast] = useState<{ message: string; error: boolean } | null>(null), [about, setAbout] = useState(false);
   const prefs = usePreferences(), detached = new URLSearchParams(location.search).get('detached') === '1';
+  const background = useBackground(prefs.backgroundMode === 'image' ? prefs.backgroundImage : '');
   const [settingsSection, setSettingsSection] = useState<SettingsSection | null>(null);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const notify = useCallback((message: string, error = false) => { clearTimeout(toastTimer.current); setToast({ message, error }); toastTimer.current = setTimeout(() => setToast(null), error ? 6500 : 3000); }, []);
-  const { state, online } = useDevice(notify), detectedPorts = usePorts();
+  const { state, online, ready } = useDevice(notify), detectedPorts = usePorts();
+  useEffect(() => { window.signaldeskBoot?.configure(prefs); }, [prefs]);
+  useEffect(() => { window.signaldeskBoot?.stage('service'); }, []);
+  useEffect(() => { if (ready) window.signaldeskBoot?.ready(); }, [ready]);
   const [simple, setSimple] = useLayoutToggle('simple', false), [navExpanded, setNavExpanded] = useLayoutToggle('navigation', false);
   const [connectionOpen, setConnectionOpen] = useLayoutToggle('connection', window.innerWidth > 900), [simpleSideOpen, setSimpleSideOpen] = useState(false);
   const [sideTab, setSideTab] = useState<'project' | 'connection'>('connection'), [fullAgentOpen, setFullAgentOpen] = useLayoutToggle('agent-panel', false), [fullDockOpen, setFullDockOpen] = useLayoutToggle('bottom-panel', false);
@@ -76,6 +82,7 @@ export default function App() {
   const activePage = pages.find(item => item.id === page)!;
   const activeDevice = state.devices?.find(device => device.id === state.activeDevice), projectName = activeDevice?.projectRoot?.split(/[\\/]/).filter(Boolean).at(-1);
   const scopeKey = `${state.activeDevice}:${activeDevice?.projectRoot || ''}`;
+  const pageSurface = useSurfaceMotion(`${page}:${scopeKey}`);
   const sourceTabs = fileTabs[scopeKey] || { files: activeDevice?.projectProfile?.entryFile ? [activeDevice.projectProfile.entryFile] : [], selected: activeDevice?.projectProfile?.entryFile || '' };
   const openFile = (file: string) => { setFileTabs(current => ({ ...current, [scopeKey]: { files: [...new Set([...sourceTabs.files, file])].slice(-12), selected: file } })); setNavExpanded(false); navigate('editor'); };
   const closeFile = (file: string) => { const files = sourceTabs.files.filter(item => item !== file); setFileTabs(current => ({ ...current, [scopeKey]: { files, selected: sourceTabs.selected === file ? files.at(-1) || '' : sourceTabs.selected } })); };
@@ -132,7 +139,8 @@ export default function App() {
     ...pages.map(item => ({ label: item.label, group: item.group, action: () => navigate(item.id) })),
     { label: '输出与日志面板', action: () => { setDockTab('logs'); setDockOpen(true); } },
   ];
-  return <div className={`app-shell studio-shell ide-shell ${window.signaldeskDesktop?.integratedTitlebar ? 'integrated-titlebar' : ''} ${detached ? 'detached-panel' : ''} ${prefs.toolbar ? 'expanded-toolbar' : 'quiet-toolbar'} ${simple ? 'simple-mode' : 'full-mode'} ${navExpanded ? 'nav-expanded' : 'nav-collapsed'} ${showConnection ? '' : 'connection-hidden'} ${showAgent ? 'agent-split' : ''}`} style={{ '--accent': prefs.accent, '--editor-size': prefs.editorSize + 'px', '--explorer-width': `${sideSize.size}px`, '--agent-width': `${agentSize.size}px`, '--dock-height': `${dockSize.size}px` } as CSSProperties}>
+  return <div className={`app-shell studio-shell ide-shell ${window.signaldeskDesktop?.integratedTitlebar ? 'integrated-titlebar' : ''} ${detached ? 'detached-panel' : ''} ${prefs.toolbar ? 'expanded-toolbar' : 'quiet-toolbar'} ${simple ? 'simple-mode' : 'full-mode'} ${navExpanded ? 'nav-expanded' : 'nav-collapsed'} ${showConnection ? '' : 'connection-hidden'} ${showAgent ? 'agent-split' : ''}`} data-motion={prefs.motion ? 'on' : 'off'} data-motion-style={prefs.motionStyle} data-background={prefs.backgroundMode} style={{ '--accent': prefs.accent, '--accent-ink': accentInk(prefs.accent), '--background-dim': prefs.backgroundDim / 100, '--editor-size': prefs.editorSize + 'px', '--explorer-width': `${sideSize.size}px`, '--agent-width': `${agentSize.size}px`, '--dock-height': `${dockSize.size}px` } as CSSProperties}>
+    <div className="workbench-background" aria-hidden="true" style={{ backgroundColor: prefs.backgroundColor }}><div style={{ backgroundImage: background.url ? `url("${background.url}")` : undefined, backgroundSize: prefs.backgroundFit, filter: `blur(${prefs.backgroundBlur}px)` }} /></div>
     <header className="app-header"><div className="brand"><CircuitBoard size={23} /><span>Signal<span>Desk</span></span></div><div className="desktop-menus"><WorkbenchMenu label="文件" items={fileMenu} />{window.signaldeskDesktop && <button className="menu-trigger" aria-label="编辑" onClick={() => void window.signaldeskDesktop!.nativeMenu('edit')}>编辑</button>}<WorkbenchMenu label="视图" items={viewMenu} /><WorkbenchMenu label="工具" items={toolMenu} /><button className="menu-trigger" aria-label="设置" onClick={() => setSettingsSection('appearance')}>设置</button></div><div className="compact-menu"><WorkbenchMenu label="工作区菜单" items={[...fileMenu, ...viewMenu, ...toolMenu]} icon /></div><div className="header-breadcrumb" title={activeDevice?.projectRoot}><FolderOpen size={14} /><span>{projectName || '本地工作区'}</span>{activeDevice?.chip && <span className="header-chip">{activeDevice.chip}</span>}</div>
       <button className="global-search" title="查找功能或设备 (Ctrl+K)" aria-label="打开功能搜索" onClick={() => setPalette(true)}><Search size={15} /><span>查找功能或设备</span></button>
       <button className="add-project-button" aria-label="添加项目" title="添加项目" disabled={!online} onClick={() => setSetup(true)}><FolderPlus size={16} /><span>添加项目</span></button>
@@ -144,7 +152,7 @@ export default function App() {
       <main className={`main-shell ${['editor', 'agent', 'logs', 'external'].includes(page) ? 'source-focus' : ''}`}><DeviceTabs state={state} notify={notify} /><div className="workpage-tabs" aria-label="已打开工作页" hidden={!prefs.workTabs || tabs.length < 2}>{tabs.map(id => { const item = pages.find(page => page.id === id)!; return <div key={id} className={page === id ? 'active' : ''}><button aria-label={`工作页 ${item.label}`} aria-pressed={page === id} onClick={() => navigate(id)}><item.icon size={13} />{item.label}</button>{tabs.length > 1 && <IconButton title={`关闭工作页 ${item.label}`} onClick={() => { const rest = tabs.filter(tab => tab !== id); setTabs(rest); if (page === id) navigate(rest.at(-1) || 'workspace'); }}><X size={12} /></IconButton>}</div>; })}</div>
         <QuickConnection key={`quick:${state.activeDevice || 'initial'}`} state={state} online={online} notify={notify} configure={configure} />
         <div className="page-heading"><div className="page-title-row"><h1>{activePage.label}</h1><span className="page-context">{activeDevice?.name || '工作区'}{activeDevice?.chip ? ` / ${activeDevice.chip}` : ''}</span></div><div className="page-actions">{state.processingMode !== 'raw' && <button className="quiet-button" onClick={resetProcessing}><RotateCcw size={14} />原始通道</button>}<span className="session-status"><span className={`status-dot ${state.connected || state.replay?.playing ? 'live' : ''}`} />{state.connected ? '采集中' : state.source === 'replay' ? '回放模式' : '待连接'}</span><button className={`record-button ${state.recording ? 'is-recording' : ''}`} disabled={recordBusy || (!state.recording && !state.connected)} onClick={record}>{state.recording ? <Square size={13} /> : <Circle size={13} />}<span>{state.recording ? '停止录制' : '开始录制'}</span></button></div></div>
-        <div className={`page-content page-${page}`}><Suspense key={scopeKey} fallback={<div className="page-loading">正在加载工作区</div>}>
+        <div ref={pageSurface} className={`page-content page-${page}`}><Suspense key={scopeKey} fallback={<div className="page-loading" role="status">正在加载工作区</div>}>
           {tabs.includes('workspace') && <div className="cached-workspace" hidden={page !== 'workspace'}><Workspace state={state} notify={notify} simple={simple} active={page === 'workspace'} /></div>}
           {page === 'terminal' && <><DecodeQuality state={state} /><Terminal /></>}
           {page === 'editor' && <div className="editor-page"><div className="source-tabs">{sourceTabs.files.map(file => <div key={file} className={sourceTabs.selected === file ? 'active' : ''}><button title={file} onClick={() => openFile(file)}>{file.split('/').at(-1)}</button><IconButton title={`关闭文件 ${file}`} onClick={() => closeFile(file)}><X size={12} /></IconButton></div>)}</div><SourceWorkspace file={sourceTabs.selected} state={state} analyze={reviewFile} notify={notify} validate={validate} outlineChange={(file, items) => setOutlines(current => ({ ...current, [scopeKey]: { file, items } }))} jump={sourceJump?.scope === scopeKey && sourceJump.file === sourceTabs.selected ? sourceJump : undefined} /></div>}
@@ -156,7 +164,7 @@ export default function App() {
           {page === 'commands' && <Commands state={state} notify={notify} />}
           {page === 'instruments' && <Instruments connected={state.connected} notify={notify} />}
           {page === 'sessions' && <Sessions state={state} notify={notify} />}
-          {page === 'agent' && <AgentPanel device={state} notify={notify} request={agentRequests[scopeKey]} />}
+          {page === 'agent' && <AgentPanel device={state} notify={notify} openSource={jumpToDiagnostic} request={agentRequests[scopeKey]} />}
           {page === 'frames' && <FrameTools state={state} notify={notify} />}
           {page === 'automation' && <Automation state={state} notify={notify} />}
           {page === 'alarms' && <AlarmPanel state={state} notify={notify} />}
@@ -169,7 +177,7 @@ export default function App() {
         {!autoSend && prefs.sendBar === 'auto' && <div className="send-reveal"><button aria-expanded={sourceSendOpen} onClick={() => setSourceSendOpen(!sourceSendOpen)}><Plug size={13} />{sourceSendOpen ? '收起串口发送栏' : '串口发送'}<span>{state.config.path === 'unassigned' ? '未匹配串口' : state.config.path}</span></button></div>}
         <div className="context-sendbar" hidden={!showSend}><SendBar key={`send:${state.activeDevice || 'initial'}`} state={state} notify={notify} /></div>
       </main>
-      {showAgent && <><PanelDivider panel={agentSize} label="调整 Agent 分栏宽度" reverse /><aside className="agent-dock" aria-label="Agent 分栏"><div className="agent-dock-heading"><Bot size={15} /><strong>Agent</strong><span>{activeDevice?.name}</span><IconButton title="关闭 Agent 面板" onClick={() => setAgentOpen(false)}><X size={15} /></IconButton></div><AgentPanel key={scopeKey} device={state} notify={notify} compact request={agentRequests[scopeKey]} /></aside></>}
+      {showAgent && <><PanelDivider panel={agentSize} label="调整 Agent 分栏宽度" reverse /><aside className="agent-dock" aria-label="Agent 分栏"><div className="agent-dock-heading"><Bot size={15} /><strong>Agent</strong><span>{activeDevice?.name}</span><IconButton title="关闭 Agent 面板" onClick={() => setAgentOpen(false)}><X size={15} /></IconButton></div><AgentPanel key={scopeKey} device={state} notify={notify} openSource={jumpToDiagnostic} compact request={agentRequests[scopeKey]} /></aside></>}
     </div>
     <footer className="status-bar"><span className="footer-brand"><span className={`status-dot ${online ? 'live' : ''}`} />{online ? 'READY' : 'OFFLINE'}</span><span>{state.source === 'demo' ? 'DEMO' : state.config.path === 'unassigned' ? '未匹配串口' : state.config.path} <span className="footer-divider">/</span> {state.config.baudRate} <span className="footer-divider">/</span> {state.config.dataBits}{state.config.parity[0].toUpperCase()}{state.config.stopBits}</span><span className="status-counters"><span><ArrowDown size={11} />RX <b>{formatBytes(state.rxBytes)}</b></span><span><ArrowUp size={11} />TX <b>{formatBytes(state.txBytes)}</b></span><span>解析跳过 <b>{state.parseErrors}</b></span>{state.dropped > 0 && <span className="warning">显示丢弃 {state.dropped}</span>}</span><span className="footer-version">{simple ? '精简工作区' : '完整工作区'} · SignalDesk</span></footer>
     {toast && <div role="status" className={`toast ${toast.error ? 'error' : ''}`}>{toast.error ? <Info size={17} /> : <Check size={17} />}<span>{toast.message}</span><IconButton title="关闭消息" onClick={() => setToast(null)}><X size={15} /></IconButton></div>}

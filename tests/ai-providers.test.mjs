@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { callModel, listModels } from '../server/ai/provider.mjs';
-import { normalizeBaseUrl, protocolProblem, AI_PROVIDERS } from '../shared/ai-providers.mjs';
+import { normalizeBaseUrl, protocolProblem, AI_PROVIDERS, providerFor } from '../shared/ai-providers.mjs';
 
 const messages = [{ role: 'system', content: 'system' }, { role: 'user', content: 'read' }];
 const tools = [{ name: 'snapshot', description: 'Read data', parameters: { type: 'object', properties: {}, additionalProperties: false, required: [] } }];
@@ -12,12 +12,13 @@ test('presets use supported protocol and complete endpoint input is normalized',
   for (const preset of AI_PROVIDERS) assert.equal(protocolProblem(preset.baseUrl, preset.apiStyle), '');
   assert.equal(normalizeBaseUrl('https://api.deepseek.com/chat/completions/'), 'https://api.deepseek.com');
   assert.equal(normalizeBaseUrl('https://api.openai.com'), 'https://api.openai.com/v1');
-  assert.match(protocolProblem('https://api.deepseek.com', 'responses'), /Chat Completions/);
+  assert.equal(protocolProblem('https://api.deepseek.com', 'responses'), '');
+  assert.equal(providerFor('https://api.deepseek.com/anthropic/v1'), 'deepseek');
   assert.throws(() => normalizeBaseUrl('https://key:pass@example.com'), /格式/);
 });
 
 test('DeepSeek protocol mismatch fails before network and detects wrong response shape', async () => {
-  await assert.rejects(callModel({ config: config('responses', 'https://api.deepseek.com'), messages, fetcher: () => { throw new Error('must not send'); } }), /Chat Completions/);
+  await assert.rejects(callModel({ config: config('anthropic', 'https://api.deepseek.com'), messages, fetcher: () => { throw new Error('must not send'); } }), /anthropic/);
   await assert.rejects(callModel({ config: config('responses'), messages, fetcher: async () => reply({ choices: [{ message: { content: 'hello' } }] }) }), /切换为 Chat Completions/);
   await assert.rejects(callModel({ config: config('chat'), messages, fetcher: async () => reply({ choices: [{ message: { content: '', reasoning_content: 'thinking' }, finish_reason: 'length' }] }) }), /reasoning_content/);
 });
@@ -56,4 +57,34 @@ test('model discovery supports standard, Anthropic and Gemini lists', async () =
 test('empty replies and truncated replies never silently pass as complete success', async () => {
   for (const style of ['chat', 'responses', 'anthropic', 'gemini']) await assert.rejects(callModel({ config: config(style), messages, fetcher: async () => reply({}) }), /未返回可用正文/);
   const result = await callModel({ config: config('chat'), messages, fetcher: async () => reply({ choices: [{ message: { content: 'partial' }, finish_reason: 'length' }] }) }); assert.match(result.content, /输出上限/);
+});
+
+test('DeepSeek supports Chat, Responses and Anthropic endpoints with protocol-specific thinking controls', async () => {
+  const fixtures = {
+    chat: { model: 'deepseek-flash', choices: [{ message: { content: 'OK' }, finish_reason: 'stop' }] },
+    responses: { model: 'deepseek-flash', output: [{ type: 'message', content: [{ type: 'output_text', text: 'OK' }] }], status: 'completed' },
+    anthropic: { model: 'deepseek-flash', content: [{ type: 'text', text: 'OK' }], stop_reason: 'end_turn', usage: { input_tokens: 10, cache_read_input_tokens: 5, cache_creation_input_tokens: 3, output_tokens: 2 } },
+  };
+  for (const style of ['chat', 'responses', 'anthropic']) for (const thinkingMode of ['auto', 'disabled', 'enabled']) {
+    const enabled = thinkingMode === 'enabled';
+    const result = await callModel({ config: { ...config(style, `https://api.deepseek.com${style === 'anthropic' ? '/anthropic' : ''}`), model: 'deepseek-flash', thinkingMode, reasoningEffort: 'max' }, messages, fetcher: async (url, options) => {
+      const body = JSON.parse(options.body);
+      assert.equal(url, `https://api.deepseek.com/${{ chat: 'chat/completions', responses: 'responses', anthropic: 'anthropic/v1/messages' }[style]}`);
+      assert.equal(body.model, 'deepseek-flash');
+      if (style === 'responses') { assert.deepEqual(body.reasoning, { effort: enabled ? 'xhigh' : 'none' }); assert.equal(body.include, undefined); assert.equal(body.thinking, undefined); assert.equal(body.max_output_tokens, 8192); }
+      else if (style === 'anthropic') { assert.deepEqual(body.thinking, { type: enabled ? 'adaptive' : 'disabled' }); assert.deepEqual(body.output_config, enabled ? { effort: 'max' } : undefined); assert.equal(options.headers['x-api-key'], 'fixture-secret'); assert.equal(body.max_tokens, 8192); }
+      else { assert.deepEqual(body.thinking, { type: enabled ? 'enabled' : 'disabled' }); assert.equal(body.reasoning_effort, enabled ? 'max' : undefined); }
+      return reply(fixtures[style]);
+    } });
+    assert.equal(result.content, 'OK'); if (style === 'anthropic') assert.equal(result.provenance.inputTokens, 18);
+  }
+});
+
+test('DeepSeek uses its standard model catalog for every protocol and reports non-Chat reasoning exhaustion', async () => {
+  const result = await listModels(config('anthropic', 'https://api.deepseek.com/anthropic'), { fetcher: async (url, options) => {
+    assert.equal(url, 'https://api.deepseek.com/models'); assert.equal(options.headers.Authorization, 'Bearer fixture-secret'); assert.equal(options.headers['x-api-key'], undefined);
+    return reply({ data: [{ id: 'deepseek-flash', object: 'model' }, { id: 'deepseek-v4-pro', object: 'model' }] });
+  } });
+  assert.equal(result.models.length, 2);
+  for (const style of ['responses', 'anthropic']) await assert.rejects(callModel({ config: config(style, `https://api.deepseek.com${style === 'anthropic' ? '/anthropic' : ''}`), messages, fetcher: async () => reply(style === 'responses' ? { output: [{ type: 'reasoning', summary: [{ type: 'summary_text', text: 'private' }] }], status: 'incomplete', incomplete_details: { reason: 'max_output_tokens' } } : { content: [{ type: 'thinking', thinking: 'private' }], stop_reason: 'max_tokens' }) }), error => /快速回答/.test(error.message) && !error.message.includes('private'));
 });
