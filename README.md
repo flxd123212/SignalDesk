@@ -67,8 +67,8 @@ SignalDesk 将设备连接、实时数据、工程源码、编译测试和 AI �
 
 | 文件 | 用途 |
 | --- | --- |
-| `SignalDesk-Setup-0.1.3-x64.exe` | 安装版，可选择安装目录，创建桌面和开始菜单快捷方式 |
-| `SignalDesk-Portable-0.1.3-x64.exe` | 单文件免安装版，启动时解压运行环境 |
+| `SignalDesk-Setup-0.1.5-x64.exe` | 安装版，可选择安装目录，创建桌面和开始菜单快捷方式 |
+| `SignalDesk-Portable-0.1.5-x64.exe` | 单文件免安装版，启动时解压运行环境 |
 
 两种版本均自带 Electron/Node.js，无需另装 Node.js。USB 串口驱动、编译器、SDK、器件包和下载器软件需要根据目标设备单独安装。
 
