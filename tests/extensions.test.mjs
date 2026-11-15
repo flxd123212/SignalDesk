@@ -108,7 +108,7 @@ test('firmware library hashes bytes and requires a target-bound confirmation bef
   const directory = await temporary(t), hub = new DeviceHub({ directory }); t.after(() => hub.dispose());
   let calls = 0;
   const service = new ChipService(path.join(directory, 'firmware'), hub, { spawnProcess: () => { calls++; const child = new EventEmitter(); child.stdout = new EventEmitter(); child.stderr = new EventEmitter(); setTimeout(() => child.emit('close', 0), 10); return child; } });
-  const executable = path.join(directory, process.platform === 'win32' ? 'esptool.exe' : 'esptool'); await fs.writeFile(executable, 'MOCK');
+  const executable = path.join(directory, process.platform === 'win32' ? 'esptool.exe' : 'esptool'); await fs.writeFile(executable, 'MOCK', { mode: 0o755 });
   const image = await service.upload({ name: 'app.bin', data: Buffer.from([1, 2, 3]).toString('base64'), version: 'test' });
   assert.equal((await service.list()).length, 1);
   const plan = await service.prepare({ family: 'esp32', chip: 'esp32', port: 'COM3', baudRate: 115200, executable, images: [{ id: image.id, address: '0x10000' }] });

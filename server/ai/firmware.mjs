@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { createTwoFilesPatch, structuredPatch } from 'diff';
 
-const allowed = new Set(['.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', '.hxx', '.cmake', '.ino', '.rs', '.py', '.ini', '.toml', '.txt', '.json', '.yaml', '.yml', '.ioc', '.uvprojx', '.uvproj', '.uvoptx', '.uvopt', '.sct', '.s', '.ld', '.ewp', '.eww', '.ewd', '.icf']);
+const allowed = new Set(['.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', '.hxx', '.cmake', '.ino', '.rs', '.py', '.pyi', '.go', '.lua', '.java', '.cs', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.sh', '.bash', '.ps1', '.asm', '.v', '.sv', '.vh', '.svh', '.md', '.html', '.css', '.xml', '.ini', '.toml', '.txt', '.json', '.yaml', '.yml', '.ioc', '.uvprojx', '.uvproj', '.uvoptx', '.uvopt', '.sct', '.s', '.ld', '.ewp', '.eww', '.ewd', '.icf']);
 const excluded = new Set(['node_modules', '.git', '.pio', 'build', 'target', '.signaldesk-backups', '.references', '.venv']);
 const hash = content => createHash('sha256').update(content).digest('hex');
 

@@ -1,3 +1,4 @@
+import { portPathKey } from './platform.mjs';
 import fs from 'node:fs/promises';
 import { EventEmitter } from 'node:events';
 import path from 'node:path';
@@ -34,7 +35,7 @@ export function identifyPort(port) {
     if (arduino) { [result.chip, result.board] = arduino; result.family = 'avr'; result.confidence = 'descriptor'; evidence('Arduino VID/PID 对照；兼容板可能复用标识'); }
   }
   const descriptor = [port.friendlyName, port.manufacturer].filter(Boolean).join(' ');
-  if (/bluetooth|蓝牙|BTHENUM|BTHMODEM/i.test([descriptor, port.pnpId, port.path].join(' '))) { result.interface = 'Bluetooth SPP / 虚拟串口'; evidence('蓝牙串口描述符；不代表 BLE GATT 服务'); }
+  if (/bluetooth|蓝牙|BTHENUM|BTHMODEM|\/dev\/rfcomm\d/i.test([descriptor, port.pnpId, port.path].join(' '))) { result.interface = 'Bluetooth SPP / 虚拟串口'; evidence('蓝牙串口描述符；不代表 BLE GATT 服务'); }
   if (descriptor) evidence(descriptor.slice(0, 180));
   const explicit = descriptor.match(/\b(ESP32[- ]?(?:S[23]|C[2356]|H2|P4)|ESP8266|RP2040|RP2350|STM32[A-Z]\d{3}[A-Z0-9]*)\b/i)?.[1];
   if (explicit && !/ST-LINK|J-Link/.test(result.interface)) { result.chip = explicit.toUpperCase().replace(' ', '-'); result.family = chipFamily(result.chip); result.confidence = 'descriptor'; }
@@ -77,7 +78,7 @@ export class PortDiscovery extends EventEmitter {
     const ports = (await this.listPorts()).map(port => ({ ...port, identification: identifyPort(port) })).sort((a, b) => a.path.localeCompare(b.path, undefined, { numeric: true }));
     if (this.disposed) return ports;
     const before = this.snapshot;
-    const identity = port => JSON.stringify([port.path.toLowerCase(), portKey(port), port.vendorId || '', port.productId || '']);
+    const identity = port => JSON.stringify([portPathKey(port.path), portKey(port), port.vendorId || '', port.productId || '']);
     const previous = new Set(before.ports.map(identity)), current = new Set(ports.map(identity));
     const added = before.initialized ? ports.filter(port => !previous.has(identity(port))) : [];
     const removed = before.ports.filter(port => !current.has(identity(port)));
@@ -86,8 +87,8 @@ export class PortDiscovery extends EventEmitter {
     let changed = false;
     for (const device of this.hub.devices.values()) {
       const match = matchBinding(device.portBinding, ports), engine = device.engine;
-      if (match.status === 'matched' && device.portBinding.autoMatch && !engine.connected && !engine.busy && !engine.flashLock && !engine.automationLock && engine.source !== 'replay' && !engine.store.recording && !this.hub.reserved.has(match.port.path.toLowerCase())) {
-        const occupied = [...this.hub.devices.values()].some(other => other !== device && (other.engine.connected || other.engine.busy) && other.engine.config.path.toLowerCase() === match.port.path.toLowerCase());
+      if (match.status === 'matched' && device.portBinding.autoMatch && !engine.connected && !engine.busy && !engine.flashLock && !engine.automationLock && engine.source !== 'replay' && !engine.store.recording && !this.hub.reserved.has(portPathKey(match.port.path))) {
+        const occupied = [...this.hub.devices.values()].some(other => other !== device && (other.engine.connected || other.engine.busy) && portPathKey(other.engine.config.path) === portPathKey(match.port.path));
         if (!occupied && engine.config.path !== match.port.path) { engine.config = { ...engine.config, path: match.port.path }; changed = true; }
       }
     }

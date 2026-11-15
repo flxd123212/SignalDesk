@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
 import { keilPlan, readKeilProject, findKeilExecutable, keilArtifact } from './keil.mjs';
+import { toolDirectories, executableNames, isExecutable, portPathKey, toolEnvironment, stopProcessTree } from './platform.mjs';
 
 const digest = bytes => createHash('sha256').update(bytes).digest('hex');
 const toolNames = { esp32: 'esptool', esp8266: 'esptool', stm32: 'STM32_Programmer_CLI', avr: 'avrdude' };
@@ -71,12 +72,12 @@ export class ChipService extends EventEmitter {
     return { ...info, path: filename };
   }
   async executable(family, supplied = '') {
-    const basename = toolNames[family] + (process.platform === 'win32' ? '.exe' : '');
     if (!toolNames[family]) throw new Error('芯片系列无效');
-    const candidates = supplied ? [supplied] : (process.env.PATH || '').split(path.delimiter).map(folder => path.join(folder.replace(/^"|"$/g, ''), basename));
+    const names = executableNames(toolNames[family]), basename = names[0];
+    const candidates = supplied ? [supplied] : toolDirectories().flatMap(folder => names.map(name => path.join(folder, name)));
     for (const candidate of candidates) {
-      if (!path.isAbsolute(candidate) || path.basename(candidate).toLowerCase() !== basename.toLowerCase()) continue;
-      try { if ((await fs.stat(candidate)).isFile()) return candidate; } catch { /* Try the next PATH directory. */ }
+      if (!path.isAbsolute(candidate) || !names.some(name => name.toLowerCase() === path.basename(candidate).toLowerCase())) continue;
+      if (await isExecutable(candidate)) return candidate;
     }
     throw new Error(`未找到 ${basename}，请安装官方工具或指定可执行文件绝对路径`);
   }
@@ -116,24 +117,24 @@ export class ChipService extends EventEmitter {
         device.engine.flashLock = true;
       }
       for (const image of plan.images) await this.image(image.id);
-      if (plan.target !== 'SWD' && [...this.hub.devices.values()].some(({ engine }) => (engine.connected || engine.busy) && engine.config.path.toLowerCase() === plan.target.toLowerCase())) throw new Error('请先断开占用下载串口的设备');
-      if (plan.target !== 'SWD') this.hub.reserved.add(plan.target.toLowerCase());
+      if (plan.target !== 'SWD' && [...this.hub.devices.values()].some(({ engine }) => (engine.connected || engine.busy) && portPathKey(engine.config.path) === portPathKey(plan.target))) throw new Error('请先断开占用下载串口的设备');
+      if (plan.target !== 'SWD') this.hub.reserved.add(portPathKey(plan.target));
       this.plans.delete(id);
       this.job = { id, status: 'running', target: plan.target, command: [plan.executable, ...plan.args].map(part => JSON.stringify(part)).join(' '), output: '', startedAt: new Date().toISOString(), exitCode: null };
-      const child = this.child = this.spawnProcess(plan.executable, plan.args, { shell: false, windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] });
+      const child = this.child = this.spawnProcess(plan.executable, plan.args, { shell: false, windowsHide: true, detached: process.platform !== 'win32', env: toolEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
       const append = value => { this.job.output = (this.job.output + value.toString()).slice(-48000); this.emit('update'); };
       child.stdout.on('data', append); child.stderr.on('data', append);
       const timeout = setTimeout(() => { append('\n烧录超过 5 分钟，任务已停止。'); this.stop(); }, 300000);
       child.once('error', error => { append(error.message); this.job.status = 'failed'; });
-      child.once('close', async code => { clearTimeout(timeout); if (plan.logFile) { try { append((await fs.readFile(plan.logFile)).subarray(-24000)); } catch { append('\nKeil 未生成下载日志。'); } } this.child = null; if (plan.deviceId && this.hub.devices.has(plan.deviceId)) this.hub.devices.get(plan.deviceId).engine.flashLock = false; this.hub.reserved.delete(plan.target.toLowerCase()); this.job.exitCode = code; if (this.job.status !== 'cancelled') this.job.status = code === 0 || (plan.family === 'keil' && code === 1) ? 'succeeded' : 'failed'; this.emit('update'); });
+      child.once('close', async code => { clearTimeout(timeout); if (plan.logFile) { try { append((await fs.readFile(plan.logFile)).subarray(-24000)); } catch { append('\nKeil 未生成下载日志。'); } } this.child = null; if (plan.deviceId && this.hub.devices.has(plan.deviceId)) this.hub.devices.get(plan.deviceId).engine.flashLock = false; this.hub.reserved.delete(portPathKey(plan.target)); this.job.exitCode = code; if (this.job.status !== 'cancelled') this.job.status = code === 0 || (plan.family === 'keil' && code === 1) ? 'succeeded' : 'failed'; this.emit('update'); });
       this.emit('update'); return this.job;
-    } catch (error) { if (!this.child) { this.hub.reserved.delete(plan.target.toLowerCase()); if (plan.deviceId && this.hub.devices.has(plan.deviceId)) this.hub.devices.get(plan.deviceId).engine.flashLock = false; } throw error; }
+    } catch (error) { if (!this.child) { this.hub.reserved.delete(portPathKey(plan.target)); if (plan.deviceId && this.hub.devices.has(plan.deviceId)) this.hub.devices.get(plan.deviceId).engine.flashLock = false; } throw error; }
     finally { this.preparing = false; }
   }
   stop() {
     if (!this.child) return;
     this.job.status = 'cancelled';
-    if (process.platform === 'win32') spawn('taskkill.exe', ['/PID', String(this.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' }); else this.child.kill('SIGTERM');
+    stopProcessTree(this.child);
     this.emit('update');
   }
 }

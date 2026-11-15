@@ -5,9 +5,11 @@
 Feasible as an evidence-linked debug map, not as automatic electrical simulation.
 SignalDesk already has device/project binding, React Flow diagrams, telemetry,
 command permissions, alarms and source-change history. These are reusable building
-blocks. The circuit importer and circuit-specific diagnostic workflow are a proposed
-extension, **not an implemented feature**. No user schematic, board or firmware
-pin mapping has been supplied for hardware validation.
+blocks. The development branch now includes KiCad exported XML netlist import,
+manual pin/source/telemetry mapping, a scoped live map and ACK/fresh-feedback test
+drafts. See WORKSPACES.md. PDF/image interpretation, automatic pin inference,
+electrical simulation and evidence-based physical fault diagnosis remain proposed.
+No user schematic, board or firmware pin mapping has been supplied for hardware validation.
 
 ## Proposed Data Model
 

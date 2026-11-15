@@ -1,7 +1,10 @@
-import { Activity, Bell, Bot, Box, Cable, Code2, Cpu, FlaskConical, FolderOpen, GitBranch, LayoutGrid, List, Network, PanelsTopLeft, ScanLine, ScrollText, SlidersHorizontal, TerminalSquare } from 'lucide-react';
+import { Activity, Bell, Bot, Box, Cable, Code2, Cpu, CircuitBoard, Hammer, FlaskConical, FolderOpen, GitBranch, LayoutGrid, List, Network, PanelsTopLeft, ScanLine, ScrollText, SlidersHorizontal, TerminalSquare } from 'lucide-react';
 
-export const navigationGroups = ['监测', '调试与测试', '工程与智能'];
+export const navigationGroups = ['软件', '硬件', '联调', '测试'];
 export const pages = [
+  { id: 'hardware', label: '硬件工程', icon: CircuitBoard, group: '硬件', keywords: 'kicad netlist 原理图 PCB 网表 引脚 GPIO 软件硬件' },
+  { id: 'circuit', label: '实时电路图', icon: CircuitBoard, group: '联调', keywords: 'sensor pins 传感器 接线 硬件 实时' },
+  { id: 'validation', label: '构建与测试', icon: Hammer, group: '测试', keywords: 'build test 编译 验证 gcc cmake' },
   { id: 'workspace', label: '实时监测', icon: Activity, group: '监测', keywords: 'scope oscilloscope spectrum fft 示波器 频谱 波形 主频' },
   { id: 'overview', label: '多设备总览', icon: LayoutGrid, group: '监测', keywords: 'devices 多串口' },
   { id: 'terminal', label: '串口终端', icon: TerminalSquare, group: '监测', keywords: 'serial uart hex ascii 搜索 收发' },

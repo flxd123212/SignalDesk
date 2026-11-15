@@ -5,6 +5,7 @@ import { compileGraph, compileScript } from './processing.mjs';
 import { SessionStore } from './sessions.mjs';
 import { TcpPort, tcpTarget } from './transports.mjs';
 import { BinaryParser, validateSchema } from './frames.mjs';
+import { serialError } from './platform.mjs';
 
 export const DEFAULT_CONFIG = { path: 'demo', transport: 'serial', baudRate: 115200, dataBits: 8, stopBits: 1, parity: 'none', rtscts: false, dtr: false, rts: false, protocol: 'firewater', sampleRate: 200 };
 
@@ -35,7 +36,7 @@ export class SerialEngine extends EventEmitter {
   }
 
   state() {
-    return { connected: this.connected, busy: this.busy, source: this.source, config: this.config, rxBytes: this.rxBytes, txBytes: this.txBytes, frames: this.sampleIndex, parseErrors: this.parser.errors, processingErrors: this.processingErrors, dropped: this.dropped, quality: { crcErrors: this.parser.crcErrors || 0, resyncBytes: this.parser.resyncBytes || 0, pendingBytes: this.parser.buffer.length, recordingErrors: this.recordingErrors, decodeMs: this.decodeMs, maxChunkBytes: this.maxChunkBytes, maxDecodeMs: this.maxDecodeMs }, latest: this.latest, names: this.names, processingMode: this.processingMode, graphValues: this.processing?.latestValues || {}, graphInputs: this.processing?.latestInputs || {}, recording: this.store.recording ? { id: this.store.recording.id, bytes: this.store.recording.bytes } : null, timedSend: this.sendInterval ? this.sendIntervalMs : null, replay: this.replay ? { id: this.replay.id, duration: this.replay.duration, position: this.replay.position, speed: this.replay.speed, playing: !!this.replayTimer } : null };
+    return { connected: this.connected, busy: this.busy, source: this.source, config: this.config, rxBytes: this.rxBytes, txBytes: this.txBytes, frames: this.sampleIndex, parseErrors: this.parser.errors, processingErrors: this.processingErrors, dropped: this.dropped, quality: { crcErrors: this.parser.crcErrors || 0, resyncBytes: this.parser.resyncBytes || 0, pendingBytes: this.parser.buffer.length, recordingErrors: this.recordingErrors, decodeMs: this.decodeMs, maxChunkBytes: this.maxChunkBytes, maxDecodeMs: this.maxDecodeMs }, latest: this.latest, names: this.names, rawNames: this.rawNames, lastSampleAt: this.lastSampleAt, validSamples: this.validSamples, processingMode: this.processingMode, graphValues: this.processing?.latestValues || {}, graphInputs: this.processing?.latestInputs || {}, recording: this.store.recording ? { id: this.store.recording.id, bytes: this.store.recording.bytes } : null, timedSend: this.sendInterval ? this.sendIntervalMs : null, replay: this.replay ? { id: this.replay.id, duration: this.replay.duration, position: this.replay.position, speed: this.replay.speed, playing: !!this.replayTimer } : null };
   }
 
   emitState() { this.emit('state', this.state()); }
@@ -43,7 +44,7 @@ export class SerialEngine extends EventEmitter {
   reset() {
     if (this.processingDefinition) this.processing = this.processingDefinition.mode === 'graph' ? compileGraph(this.processingDefinition.graph, { sampleRate: this.config.sampleRate }) : compileScript(this.processingDefinition.script);
     this.parser = this.config.protocol === 'custom' ? new BinaryParser(this.config.schema) : new StreamParser(this.config.protocol); this.sampleIndex = 0; this.demoIndex = 0;
-    this.rxBytes = 0; this.txBytes = 0; this.processingErrors = 0; this.dropped = 0; this.latest = []; this.names = []; this.history = []; this.recentPackets = [];
+    this.rxBytes = 0; this.txBytes = 0; this.processingErrors = 0; this.dropped = 0; this.latest = []; this.names = []; this.history = []; this.recentPackets = []; this.rawNames = []; this.validSamples = 0; this.lastSampleAt = 0;
     this.recordingErrors = 0; this.decodeMs = 0; this.maxChunkBytes = 0; this.maxDecodeMs = 0;
     this.emit('reset');
   }
@@ -90,7 +91,7 @@ export class SerialEngine extends EventEmitter {
         this.source = config.path.startsWith('tcp:') ? 'tcp' : 'serial'; this.connected = true;
       }
     } catch (error) {
-      await this.disconnect(); throw error;
+      await this.disconnect(); throw new Error(serialError(error, config.path), { cause: error });
     } finally { this.busy = false; this.emitState(); }
   }
 
@@ -115,9 +116,11 @@ export class SerialEngine extends EventEmitter {
     const samples = [];
     for (const values of this.parser.push(bytes)) {
       const time = this.sampleIndex++ / this.config.sampleRate;
+      this.rawNames = this.config.protocol === 'custom' ? this.config.schema.fields.map(field => field.name) : values.map((_, index) => `CH${index + 1}`);
       try {
         const transformed = this.processing ? this.processing.run(values) : values;
         this.latest = transformed;
+        this.validSamples++; this.lastSampleAt = Date.now();
         this.names = this.processing ? this.processing.names : this.config.protocol === 'custom' ? this.config.schema.fields.map(field => field.name) : transformed.map((_, index) => `CH${index + 1}`);
         samples.push({ time, values: transformed });
       } catch (error) {

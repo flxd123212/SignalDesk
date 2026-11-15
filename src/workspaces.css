@@ -1,0 +1,103 @@
+.four-workspaces .navigation.workspace-rail { width: 58px; flex: 0 0 58px; padding: 10px 4px; overflow-y: auto; }
+.workspace-areas { display: flex; flex-direction: column; gap: 6px; }
+.workspace-areas > button { height: 62px; width: 50px; display: flex; flex-direction: column; gap: 7px; border-radius: 4px; color: #99a7b2; position: relative; }
+.workspace-areas > button > span { display: block !important; font-size: 11px; }
+.workspace-areas > button.active { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent); }
+.workspace-areas > button.active::before { content: ''; position: absolute; left: -4px; top: 13px; bottom: 13px; width: 2px; background: var(--accent); }
+.four-workspaces .workspace-rail .nav-bottom { display: flex; flex-direction: column; gap: 12px; padding: 14px 0 4px; }
+.workspace-functions { flex: none; border-bottom: 1px solid #343b42; }
+.workspace-functions > summary { padding: 10px 12px; font-size: 11px; color: #adbcc6; cursor: pointer; }
+.workspace-functions > div { padding: 0 6px 9px; max-height: 240px; overflow: auto; }
+.workspace-functions button { display: flex; justify-content: flex-start; width: 100%; height: 29px; gap: 9px; color: #aebbc8; font-size: 12px; border-radius: 3px; padding: 0 9px; }
+.workspace-functions button.active { background: color-mix(in srgb, var(--accent) 11%, transparent); color: #e0ece8; }
+.workspace-functions .workbench-menu .menu-popup { position: fixed; left: 62px; top: 150px; z-index: 70; }
+.explorer-hardware { flex: none; border-top: 1px solid #343c44; }
+.explorer-hardware summary { padding: 8px 12px; font-size: 11px; cursor: pointer; }
+.explorer-hardware summary small { float: right; color: #8aabbf; }
+.explorer-hardware > div { max-height: 160px; overflow: auto; }
+.inspector-dock .agent-dock-heading { gap: 4px; padding: 0 6px; }
+.inspector-dock .agent-dock-heading > button:not(.icon-button) { height: 35px; padding: 0 12px; border-bottom: 2px solid transparent; border-radius: 0; font-size: 12px; }
+.inspector-dock .agent-dock-heading > button.active { border-bottom-color: var(--accent); color: #e0efeb; }
+.properties-content { flex: 1; overflow: auto; min-height: 0; }
+.properties-content .node-inspector { width: auto; padding: 16px; border: 0; background: transparent; }
+.context-properties, .hardware-inspector { padding: 18px; font-size: 12px; }
+.context-properties h2 { margin: 12px 0; font-size: 15px; }
+.context-properties dl { margin: 22px 0; }
+.context-properties dt { color: #91a2ae; margin-top: 20px; }
+.context-properties dd { margin: 7px 0 0; color: #d5dfe6; overflow-wrap: anywhere; line-height: 1.6; }
+.context-properties > button { margin-right: 8px; margin-bottom: 8px; }
+.graph-workbench { display: flex; flex-direction: column; height: 100%; min-height: 440px; }
+.graph-workbench .panel-toolbar { flex-wrap: wrap; gap: 8px; padding: 9px 12px; height: auto; min-height: 46px; }
+.graph-workbench .toolbar-actions { flex-wrap: wrap; gap: 4px; }
+.graph-workbench .graph-body { display: flex; flex: 1; min-height: 330px; }
+.graph-workbench .graph-canvas { flex: 1; width: 100%; min-width: 0; min-height: 330px; }
+.graph-nodebar { display: flex; gap: 6px; align-items: center; padding: 7px 12px; border-bottom: 1px solid #343c43; flex-wrap: wrap; }
+.graph-nodebar select { width: 150px; height: 30px; font-size: 11px; padding: 4px 8px; }
+.graph-nodebar > span { font-size: 11px; margin-left: auto; }
+.graph-inspector-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.graph-link-row { display: flex; gap: 6px; align-items: center; padding: 8px 0; border-bottom: 1px solid #354047; font-size: 11px; }
+.graph-link-row > span { flex: 1; overflow-wrap: anywhere; }
+.graph-config-dialog { width: min(480px, calc(100vw - 28px)); }
+.graph-config-dialog .binding-content { padding: 22px; }
+.graph-config-dialog p { line-height: 1.6; }
+.graph-workbench .react-flow__handle { width: 12px; height: 12px; }
+.graph-workbench .react-flow__handle::after { content: ''; position: absolute; inset: -7px; }
+.graph-workbench .react-flow__node:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+.shortcut-dialog { width: min(640px, calc(100vw - 28px)); }
+.shortcut-dialog table { width: 100%; border-collapse: collapse; }
+.shortcut-dialog td { padding: 9px 12px; font-size: 12px; border-bottom: 1px solid #343c44; }
+.shortcut-dialog kbd { color: #c2dbcf; font: 11px var(--mono); }
+.source-footer select { max-width: 220px; height: 24px; min-height: 24px; font-size: 10px; padding: 0 7px; border: none; background: transparent; color: #a8bac9; }
+.hardware-workbench { display: flex; flex-direction: column; min-height: 420px; height: 100%; }
+.hardware-workbench .panel-toolbar { padding: 8px 0; gap: 8px; flex-wrap: wrap; height: auto; min-height: 42px; }
+.hardware-workbench .toolbar-actions { flex-wrap: wrap; }
+.hardware-tabs { display: flex; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid #323c43; flex-wrap: wrap; font-size: 11px; }
+.hardware-tabs .segmented button { font-size: 12px; padding: 6px 13px; }
+.hardware-search { display: flex; align-items: center; gap: 10px; padding: 12px 0; flex-wrap: wrap; }
+.hardware-search input { width: 240px; height: 32px; font-size: 12px; }
+.hardware-search > select { width: 220px; height: 32px; font-size: 12px; }
+.hardware-table-wrap { overflow: auto; flex: 1; min-height: 150px; }
+.hardware-workbench table { width: 100%; border-collapse: collapse; font-size: 12px; }
+.hardware-workbench th { color: #95a8b5; font-weight: 500; white-space: nowrap; text-align: left; }
+.hardware-workbench th, .hardware-workbench td { padding: 10px 12px; border-bottom: 1px solid #303940; line-height: 1.6; }
+.hardware-workbench td { overflow-wrap: anywhere; max-width: 360px; }
+.hardware-workbench td button { padding: 0; text-align: left; justify-content: flex-start; font-size: 12px; color: #a8d6e7; }
+.hardware-workbench tr.selected { background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.hardware-empty { min-height: 180px; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; color: #91a5b1; font-size: 13px; }
+.hardware-field-pair { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.hardware-inspector fieldset { margin: 16px 0 0; padding: 0; border: 0; min-width: 0; }
+.hardware-inspector input, .hardware-inspector select { min-height: 32px; font-size: 12px; }
+.hardware-path { overflow-wrap: anywhere; font-size: 11px; line-height: 1.7; }
+.hardware-netlist { flex: 1; min-height: 200px; overflow: auto; }
+.hardware-summary { display: flex; flex-wrap: wrap; gap: 20px; font-size: 12px; color: #9faeb8; padding: 16px 0; }
+.hardware-netlist > .field { max-width: 360px; }
+.hardware-checks, .hardware-files, .hardware-test-builder { border-top: 1px solid #333c42; margin-top: 12px; padding: 10px 0; font-size: 12px; }
+.hardware-checks summary, .hardware-files summary, .hardware-test-builder summary { cursor: pointer; color: #bdcbd4; }
+.hardware-checks p { line-height: 1.7; color: #93a6b4; }
+.hardware-files > div { display: flex; padding: 8px 0; align-items: center; gap: 16px; overflow-wrap: anywhere; }
+.hardware-test-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; padding-top: 14px; }
+.hardware-test-fields input, .hardware-test-fields select { min-height: 32px; font-size: 12px; }
+.live-circuit { display: flex; flex-direction: column; flex: 1; min-height: 360px; }
+.circuit-canvas { flex: 1; min-height: 340px; }
+.circuit-canvas .react-flow__node.circuit-part { width: 230px; background: #202c30; border-color: #568b7e; border-radius: 5px; padding: 12px; }
+.circuit-component { display: flex; flex-direction: column; gap: 8px; text-align: left; }
+.circuit-component > strong { font: 14px var(--mono); color: #8ee1c6; }
+.circuit-component > span { font-size: 11px; color: #aabac5; }
+.circuit-component > button { display: flex; justify-content: space-between; min-height: 31px; font-size: 11px; padding: 4px 0; gap: 10px; border-top: 1px solid #34474c; }
+.circuit-component > button b { color: #e4c587; font-family: var(--mono); }
+.circuit-canvas .react-flow__node.circuit-net { background: #292d32; border-color: #6e8094; color: #b6cde4; border-radius: 3px; }
+.page-validation > .validation-panel { min-height: 450px; height: 100%; }
+@media (max-width: 900px) {
+  .four-workspaces .app-body { flex-direction: column; }
+  .four-workspaces .navigation.workspace-rail { width: 100%; flex: 0 0 46px; height: 46px; padding: 3px 10px; overflow: visible; }
+  .four-workspaces .workspace-areas { flex-direction: row; width: 100%; justify-content: space-between; }
+  .four-workspaces .workspace-areas > button { width: auto; flex: 1; flex-direction: row; height: 38px; gap: 7px; }
+  .four-workspaces .workspace-areas > button.active::before { top: auto; left: 12px; right: 12px; bottom: -3px; height: 2px; width: auto; }
+  .four-workspaces .workspace-rail .nav-bottom { display: none; }
+  .four-workspaces .ide-sidebar { top: 94px; left: 0; max-height: none; }
+  .four-workspaces .main-shell { width: 100%; }
+}
+@media (max-width: 1250px) { .four-workspaces .header-breadcrumb { display: none; } .four-workspaces .brand > span { display: none; } }
+@media (max-width: 1050px) { .four-workspaces .inspector-dock { position: fixed; right: 0; top: 48px; bottom: 24px; z-index: 25; width: min(var(--agent-width), calc(100vw - 70px)); box-shadow: -14px 0 40px #0007; } .four-workspaces.agent-split .main-shell { min-width: 0; } }
+@media (max-width: 720px) { .four-workspaces .navigation.workspace-rail { width: 45px; flex-basis: 45px; } .workspace-areas > button { width: 37px; } .four-workspaces .desktop-menus { display: none; } .four-workspaces .compact-menu { display: flex; } .four-workspaces .ide-sidebar { position: fixed; top: 48px; bottom: 24px; left: 45px; z-index: 24; box-shadow: 14px 0 40px #0007; width: min(260px, calc(100vw - 70px)); } .four-workspaces .panel-divider:not(.horizontal) { display: none; } .graph-nodebar > span { width: 100%; margin: 2px 0; } .graph-workbench .react-flow__minimap { display: none; } .hardware-tabs { gap: 8px; } .hardware-test-fields { grid-template-columns: 1fr; } .hardware-workbench th, .hardware-workbench td { padding: 8px; } }
+@media (max-width: 720px) { .four-workspaces .navigation.workspace-rail { width: 100%; flex-basis: 46px; } .four-workspaces .ide-sidebar { left: 0; top: 94px; } }

@@ -1,6 +1,7 @@
 import type { ButtonHTMLAttributes, ReactNode } from 'react';
 import { useState } from 'react';
 import { getPreferences, setPreferences, usePreferences } from './preferences';
+import { shortcutLabel } from './platform';
 
 export function useLayoutToggle(key: string, initial: boolean) {
   const preferences = usePreferences();
@@ -11,6 +12,7 @@ export function useLayoutToggle(key: string, initial: boolean) {
 }
 
 export function IconButton({ title, children, ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
+  title = title ? shortcutLabel(title) : title;
   return <button type="button" {...props} className={`icon-button ${props.className || ''}`} title={title} aria-label={title}>{children}</button>;
 }
 

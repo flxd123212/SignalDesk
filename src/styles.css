@@ -1,4 +1,4 @@
-:root { font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif; color: #d8dce0; background: #151719; font-synthesis: none; color-scheme: dark; --bg: #151719; --panel: #1b1e22; --panel-raised: #22262a; --border: #30353a; --muted: #818a93; --text: #d8dce0; --accent: #66d6b4; --mono: Consolas, 'Cascadia Code', monospace; }
+:root { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif; color: #d8dce0; background: #151719; font-synthesis: none; color-scheme: dark; --bg: #151719; --panel: #1b1e22; --panel-raised: #22262a; --border: #30353a; --muted: #818a93; --text: #d8dce0; --accent: #66d6b4; --mono: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Cascadia Code', monospace; }
 * { box-sizing: border-box; letter-spacing: 0; }
 body { margin: 0; font-size: 12px; overflow: hidden; }
 button, input, select, textarea { font: inherit; }

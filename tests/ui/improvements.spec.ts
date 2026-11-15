@@ -9,8 +9,10 @@ test('project dialog detects Keil targets and offers broad chip and board choice
   const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'signaldesk-project-picker-'));
   await fs.writeFile(path.join(directory, 'sensor.uvprojx'), '<Project><Targets><Target><TargetName>Sensor Debug</TargetName><TargetOption><TargetCommonOption><Device>STM32G431CB</Device></TargetCommonOption></TargetOption></Target></Targets></Project>');
   try {
-    await page.goto('/'); await page.locator('.project-summary').click();
+    await page.goto('/'); await clickWorkbench(page, '展开连接设置'); await page.locator('.project-summary').click();
     const dialog = page.getByRole('dialog', { name: '设备与工程设置' });
+    await page.locator('.app-shell').evaluate(element => (element as HTMLElement).style.setProperty('--accent', '#87bfff'));
+    await expect.poll(() => dialog.evaluate(element => getComputedStyle(element).getPropertyValue('--accent').trim())).toBe('#87bfff');
     await expect(dialog.getByLabel('标记芯片系列').locator('option')).toHaveCount(19);
     await dialog.getByLabel('设备工程目录', { exact: true }).fill(directory);
     await dialog.getByRole('button', { name: '识别工程芯片', exact: true }).click();
@@ -19,8 +21,11 @@ test('project dialog detects Keil targets and offers broad chip and board choice
     await dialog.getByLabel('开发板型号').fill('G431 Sensor Bench');
     await dialog.screenshot({ path: 'artifacts/project-binding-desktop.png' });
     await page.setViewportSize({ width: 390, height: 844 });
+    await expect(dialog).toBeVisible();
+    await expect(dialog.getByLabel('开发板型号')).toHaveValue('G431 Sensor Bench');
     expect(await dialog.evaluate(element => element.getBoundingClientRect().width)).toBeLessThanOrEqual(390);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+    await dialog.screenshot({ path: 'artifacts/project-binding-mobile.png' });
     await dialog.getByRole('button', { name: '保存绑定', exact: true }).click(); await expect(dialog).toHaveCount(0);
     await expect(page.locator('.project-summary')).toContainText('STM32G431CB');
     const current = await (await request.get('/api/state')).json(); expect(current.devices[0].board).toBe('G431 Sensor Bench');
@@ -34,6 +39,7 @@ test('sensor graph templates generate real local waveforms and downloadable firm
   await request.post('/api/connect', { data: { path: 'demo' } }); await request.post('/api/processing', { data: { mode: 'raw' } });
   await page.goto('/'); await clickWorkbench(page, '节点编排');
   await expect(page.getByLabel('新节点类型').locator('option')).toHaveCount(24);
+  await page.getByRole('button', { name: '一键配置', exact: true }).click();
   await page.getByLabel('测试拼图模板').selectOption('sensor'); await page.getByRole('button', { name: '载入模板', exact: true }).click();
   await expect(page.locator('.react-flow__node')).toHaveCount(3);
   await page.getByRole('button', { name: '测试与代码', exact: true }).click();

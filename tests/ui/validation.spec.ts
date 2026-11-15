@@ -47,7 +47,7 @@ int main(void) {
   try {
     const plan = await call('/projects/prepare', { root }); await call('/projects/apply', { id: plan.id, targetId: plan.targets[0].id, reuseAI: false });
     await page.goto(runtime.address);
-    await page.getByRole('navigation').getByRole('button', { name: '项目源码', exact: true }).click();
+    await clickWorkbench(page, '项目源码');
     await expect(page.locator('.cm-content')).toContainText('adc_to_voltage');
     await page.getByRole('button', { name: '选择并运行测试', exact: true }).click();
     const panel = page.getByRole('region', { name: '源码编译与测试' });

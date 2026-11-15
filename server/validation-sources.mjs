@@ -3,7 +3,7 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 
 const generated = /^(?:node_modules|build(?:-.+)?|cmake-build-.+|dist|out|obj|objects|listings|target|debug|release|x64|x86|\.git|\.svn|\.pio|\.venv|venv|\.signaldesk-build)$/i;
-const sourceFile = /\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|ino|s|asm|inc|ld|lds|icf|sct|cmake|mk|py|js|mjs|ts|json|ini|ya?ml|uvprojx?|ewp|bat|cmd|sh)$|^(?:Makefile|CMakeLists\.txt|sdkconfig(?:\..+)?)$/i;
+const sourceFile = /\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|ino|s|asm|inc|ld|lds|icf|sct|cmake|mk|py|pyi|js|mjs|cjs|jsx|ts|tsx|rs|toml|lock|go|mod|sum|lua|java|cs|v|sv|vh|svh|json|ini|ya?ml|uvprojx?|ewp|bat|cmd|sh)$|^(?:Makefile|CMakeLists\.txt|sdkconfig(?:\..+)?)$/i;
 
 // Validation includes project-local drivers, headers, linker files and test scripts.
 export async function sourceFingerprint(root) {

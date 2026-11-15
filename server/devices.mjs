@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import { SerialEngine } from './engine.mjs';
+import { portPathKey } from './platform.mjs';
 
 export class DeviceHub extends EventEmitter {
   constructor(options) {
@@ -31,7 +32,7 @@ export class DeviceHub extends EventEmitter {
     this.emitState(); return id;
   }
   list() { return [...this.devices.values()].map(({ id, name, chip, board, portBinding, projectRoot, projectProfile, engine }) => ({ id, name, chip, board, portBinding, projectRoot, projectProfile, connected: engine.connected, busy: engine.busy, path: engine.config.path, source: engine.source, recording: engine.store.recording?.id, rxBytes: engine.rxBytes, txBytes: engine.txBytes, latest: engine.latest, names: engine.names })); }
-  state() { return { ...this.active.state(), activeDevice: this.activeId, devices: this.list() }; }
+  state() { return { ...this.active.state(), hostPlatform: process.platform, activeDevice: this.activeId, devices: this.list() }; }
   emitState() { for (const entry of this.devices.values()) if (entry.projectProfile) entry.engine.projectContext = { ...entry.projectProfile, chip: entry.chip, board: entry.board, root: entry.projectRoot }; this.emit('state', this.state()); }
   select(id) {
     if (!this.devices.has(id)) throw new Error('设备不存在');
@@ -53,9 +54,9 @@ export class DeviceHub extends EventEmitter {
   async connectDevice(id, config) {
     const selected = this.devices.get(id)?.engine;
     if (!selected) throw new Error('设备已关闭');
-    const target = String(config.path).toLowerCase();
+    const target = portPathKey(config.path);
     if (this.reserved.has(target)) throw new Error('该端口正在烧录');
-    if (target !== 'demo' && [...this.devices.values()].some(({ engine }) => engine !== selected && (engine.connected || engine.busy) && engine.config.path.toLowerCase() === target)) throw new Error('该端口已在另一个设备标签中打开');
+    if (target !== 'demo' && [...this.devices.values()].some(({ engine }) => engine !== selected && (engine.connected || engine.busy) && portPathKey(engine.config.path) === target)) throw new Error('该端口已在另一个设备标签中打开');
     this.reserved.add(target);
     try { return await selected.connect(config); } finally { this.reserved.delete(target); }
   }

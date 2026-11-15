@@ -9,6 +9,7 @@ test.beforeEach(async ({ request }) => {
 
 test('function search supports keyboard navigation, device search and browser history', async ({ page, request }) => {
   await page.goto('/');
+  await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
   await page.keyboard.press('Control+k');
   const search = page.getByRole('combobox', { name: '查找功能或设备' });
   await expect(search).toBeFocused();
@@ -37,7 +38,7 @@ test('workspace layout toggles persist and return space to the live chart', asyn
   await expect.poll(async () => Number((await page.locator('.plot-footer').innerText()).match(/([\d,]+) frames/)?.[1].replaceAll(',', '') || 0), { timeout: 20000 }).toBeGreaterThan(1050);
   await expect(page.locator('.uplot canvas')).toBeVisible();
   const before = await page.locator('.uplot canvas').boundingBox();
-  await clickWorkbench(page, '收起连接设置');
+  await page.getByRole('button', { name: '收起侧栏', exact: true }).click();
   await page.getByRole('button', { name: '收起终端', exact: true }).click();
   await expect(page.locator('.connection-sidebar')).not.toBeVisible();
   await expect(page.locator('.terminal-log')).not.toBeVisible();
@@ -58,6 +59,8 @@ test('device drafts and successful history stay isolated and IME enter never sen
   let added = '';
   try {
     await page.goto('/');
+    await expect(page.locator('.app-shell')).toHaveAttribute('data-ready', 'true');
+    await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
     const input = page.getByLabel('发送内容', { exact: true });
     await input.fill('*IDN?');
     const before = (await (await request.get('/api/state')).json()).txBytes;

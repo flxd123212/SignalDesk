@@ -7,10 +7,13 @@ import { keilPlan, readKeilProject, findKeilExecutable } from '../keil.mjs';
 import { iarPlan, readIarProject, findIarExecutable } from '../iar.mjs';
 import { parseDiagnostics } from '../diagnostics.mjs';
 import { gccPlan, prepareGcc, gccArtifacts } from '../gcc.mjs';
+import { toolDirectories, executableNames, isExecutable, toolEnvironment, stopProcessTree } from '../platform.mjs';
 
 export function commandPlan(commandLine, root) {
   if (typeof commandLine !== 'string' || !commandLine.trim() || commandLine.length > 2000 || /[\r\n\x00]/.test(commandLine)) throw new Error('命令行无效');
   const [command, ...args] = parseArgsStringToArgv(commandLine);
+  const languageCommands = { cargo: ['check --offline --locked', 'check --tests --offline --locked', 'build --offline --locked'], go: ['build ./...', 'test ./...'], node: ['--test'], python: ['-B -m unittest discover -s tests'] };
+  if (Object.hasOwn(languageCommands, command)) { if (!languageCommands[command].includes(args.join(' '))) throw new Error('语言工具链仅支持预设的检查、构建或测试命令'); return { command, args, cwd: root }; }
   if (command === 'idf.py') { if (args.length !== 1 || args[0] !== 'build') throw new Error('ESP-IDF 命令仅支持 idf.py build'); return { command, args, cwd: root }; }
   if (command?.toLowerCase() === 'iarbuild') {
     if (args.length !== 3 || args[1] !== '-build') throw new Error('IAR 命令格式：IarBuild 工程.ewp -build "配置名称"');
@@ -33,11 +36,17 @@ export function buildPlan(config, root) {
   if (['gcc', 'gcc-configure'].includes(config.buildPreset)) return gccPlan(config, root);
   if (config.buildPreset === 'cmake-configure') return { command: 'cmake', args: ['-S', '.', '-B', 'build', `-DCMAKE_BUILD_TYPE=${config.buildConfiguration || 'Debug'}`], cwd: root };
   if (config.buildPreset === 'test') {
+    if (config.testRunner === 'python-unittest') return { command: 'python', args: ['-B', '-m', 'unittest', 'discover', '-s', 'tests'], cwd: root };
+    if (config.testRunner === 'node-test') return { command: 'node', args: ['--test'], cwd: root };
+    if (config.testRunner === 'cargo-check') return { command: 'cargo', args: ['check', '--tests', '--offline', '--locked'], cwd: root };
+    if (config.testRunner === 'go-test') return { command: 'go', args: ['test', './...'], cwd: root };
     if (config.testRunner === 'ctest') return { command: 'ctest', args: ['--test-dir', 'build', '-C', config.buildConfiguration || 'Debug', '--output-on-failure', '--no-tests=error', '--timeout', '30'], cwd: root };
     if (!['platformio-native', 'platformio-compile'].includes(config.testRunner) || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(config.platformioEnvironment || '')) throw new Error('测试目标无效');
     return { command: 'platformio', args: ['test', '-e', config.platformioEnvironment, '--without-uploading', ...(config.testRunner === 'platformio-compile' ? ['--without-testing'] : [])], cwd: root };
   }
   if (config.buildPreset === 'iar') return iarPlan(config, root);
+  if (config.buildPreset === 'cargo') return { command: 'cargo', args: ['build', '--offline', '--locked'], cwd: root };
+  if (config.buildPreset === 'go') return { command: 'go', args: ['build', './...'], cwd: root };
   if (config.buildPreset === 'keil') return keilPlan(config, root);
   if (config.buildPreset === 'command') return commandPlan(config.commandLine, root);
   if (config.buildPreset === 'platformio') {
@@ -55,7 +64,9 @@ export function buildPlan(config, root) {
 }
 
 export async function findExecutable(command) {
-  const directories = (process.env.PATH || '').split(path.delimiter);
+  if (typeof command !== 'string' || !command) throw new Error('未指定工具链可执行程序');
+  if (command === 'node' && !process.versions.electron) return process.execPath;
+  const names = executableNames(command), directories = toolDirectories();
   if (process.platform === 'win32' && command === 'ninja') {
     for (const base of [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Microsoft Visual Studio'), 'D:\\Microsoft Visual Studio']) for (const edition of ['Community', 'Professional', 'Enterprise', 'BuildTools']) directories.push(path.join(base, '2022', edition, 'Common7', 'IDE', 'CommonExtensions', 'Microsoft', 'CMake', 'Ninja'));
   }
@@ -64,15 +75,12 @@ export async function findExecutable(command) {
     for (const base of [path.join(process.env.ProgramFiles || 'C:\\Program Files', 'Microsoft Visual Studio'), 'D:\\Microsoft Visual Studio']) for (const edition of ['Community', 'Professional', 'Enterprise', 'BuildTools']) directories.push(path.join(base, '2022', edition, 'Common7', 'IDE', 'CommonExtensions', 'Microsoft', 'CMake', 'CMake', 'bin'));
   }
   if (command === 'platformio') directories.push(path.join(process.env.USERPROFILE || process.env.HOME || '', '.platformio', 'penv', process.platform === 'win32' ? 'Scripts' : 'bin'));
-  for (const directory of directories) {
-    const candidate = path.join(directory.replace(/^"|"$/g, ''), command + (process.platform === 'win32' ? '.exe' : ''));
-    try { if (path.isAbsolute(candidate) && (await fs.stat(candidate)).isFile()) return candidate; } catch { /* Continue through PATH. */ }
-  }
+  for (const directory of directories) for (const name of names) { const candidate = path.join(directory, name); if (await isExecutable(candidate)) return candidate; }
   throw new Error(`未找到 ${command}，请安装对应工具链并加入 PATH`);
 }
 
 export async function findIdfInvoker() {
-  const candidates = [...(process.env.IDF_PATH ? [path.join(process.env.IDF_PATH, 'tools', 'idf.py')] : []), ...(process.env.PATH || '').split(path.delimiter).map(folder => path.join(folder.replace(/^"|"$/g, ''), 'idf.py'))];
+  const candidates = [...(process.env.IDF_PATH ? [path.join(process.env.IDF_PATH, 'tools', 'idf.py')] : []), ...toolDirectories().map(folder => path.join(folder, 'idf.py'))];
   for (const filename of candidates) {
     try { if (path.isAbsolute(filename) && (await fs.stat(filename)).isFile()) return { executable: await findExecutable('python'), script: filename }; } catch { /* Continue through the active ESP-IDF environment. */ }
   }
@@ -96,7 +104,7 @@ export class BuildRunner extends EventEmitter {
     const executable = idf ? idf.executable : plan.command === 'UV4' ? await findKeilExecutable(config.keilExecutable) : plan.command === 'IarBuild' ? await findIarExecutable(config.iarExecutable) : await findExecutable(plan.command);
     if (this.child) throw new Error('已有构建正在运行');
     this.job = { status: 'running', command: [plan.command, ...plan.args].join(' '), cwd: root, output: '', startedAt: new Date().toISOString(), exitCode: null, diagnostics: [], outputTruncated: false, ...(config.validationMeta ? { validation: config.validationMeta } : {}) };
-    const child = spawn(executable, idf ? [idf.script, ...plan.args] : plan.args, { cwd: root, ...(gcc ? { env: gcc.env } : {}), windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
+    const child = spawn(executable, idf ? [idf.script, ...plan.args] : plan.args, { cwd: root, env: toolEnvironment(gcc?.env), detached: process.platform !== 'win32', windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
     this.child = child;
     const append = data => {
       const output = this.job.output + data.toString(), limit = this.job.validation ? 64000 : 24000;
@@ -114,8 +122,7 @@ export class BuildRunner extends EventEmitter {
   stop() {
     if (!this.child) return;
     this.job.status = 'cancelled';
-    if (process.platform === 'win32') spawn('taskkill.exe', ['/PID', String(this.child.pid), '/T', '/F'], { windowsHide: true, stdio: 'ignore' });
-    else this.child.kill('SIGTERM');
+    stopProcessTree(this.child);
     this.emit('update');
   }
 }

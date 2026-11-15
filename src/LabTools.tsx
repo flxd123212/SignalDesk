@@ -4,6 +4,7 @@ import { api, download } from './data';
 import { Editor } from './Editor';
 import { Field, IconButton } from './ui';
 import type { AppState } from './types';
+import { hardwareTestStorageKey } from '../shared/hardware-test.mjs';
 
 type Notify = (message: string, error?: boolean) => void;
 export const defaultSchema = { header: 'AA 55', length: 8, endian: 'LE', checksum: 'modbus', fields: [{ name: 'voltage', offset: 2, type: 'u16', scale: 0.001 }, { name: 'current', offset: 4, type: 'i16', scale: 0.001 }] };
@@ -33,8 +34,9 @@ export function FrameTools({ state, notify }: { state: AppState; notify: Notify 
 }
 
 export function Automation({ state, notify }: { state: AppState; notify: Notify }) {
-  const [script, setScript] = useState(() => localStorage.getItem('signaldesk.test') || JSON.stringify(demoTest, null, 2)), [job, setJob] = useState<TestJob | null>(null);
+  const storageKey = hardwareTestStorageKey(state.activeDevice || '', state.devices?.find(device => device.id === state.activeDevice)?.projectRoot || '');
+  const [script, setScript] = useState(() => localStorage.getItem(storageKey) || localStorage.getItem('signaldesk.test') || JSON.stringify(demoTest, null, 2)), [job, setJob] = useState<TestJob | null>(null);
   useEffect(() => { let active = true; const refresh = () => api<TestJob | null>('/automation').then(value => { if (active) setJob(value); }).catch(() => {}); void refresh(); const timer = setInterval(refresh, 400); return () => { active = false; clearInterval(timer); }; }, []);
-  const run = async () => { try { const test = JSON.parse(script); localStorage.setItem('signaldesk.test', script); setJob(await api<TestJob>('/automation/start', test)); } catch (error) { notify((error as Error).message, true); } };
+  const run = async () => { try { const test = JSON.parse(script); localStorage.setItem(storageKey, script); setJob(await api<TestJob>('/automation/start', { ...test, deviceId: state.activeDevice })); } catch (error) { notify((error as Error).message, true); } };
   return <section className="lab-editor-page tool-panel"><div className="panel-toolbar"><div className="panel-title"><FlaskConical size={16} /><span>device-test.json</span></div><div className="toolbar-actions"><IconButton title="导出测试脚本" onClick={() => download('device-test.json', script, 'application/json')}><Download size={15} /></IconButton>{job?.status === 'running' ? <button className="quiet-button" onClick={() => api('/automation/stop', {}).catch(error => notify(error.message, true))}><Square size={14} />停止测试</button> : <button className="primary compact-button" disabled={!state.connected} onClick={run}><Play size={14} />运行测试</button>}</div></div><div className="lab-split"><div className="lab-editor"><Editor value={script} onChange={setScript} /></div><aside className="lab-inspector"><h2>测试结果</h2>{job ? <><span className="muted">{job.name} · {job.target}</span><div className={`test-status ${job.status}`}>{job.status.toUpperCase()}</div>{job.results.map(result => <div className="test-step" key={result.index}><span>{String(result.index).padStart(2, '0')} · {result.type}</span><b className={result.status}>{result.status}</b><code>{result.detail}</code></div>)}{job.error && <div className="inline-error">{job.error}</div>}<button className="quiet-button" onClick={() => download('test-report.json', JSON.stringify(job, null, 2), 'application/json')}><Download size={14} />导出报告</button></> : <div className="muted">尚无运行记录</div>}</aside></div></section>;
 }

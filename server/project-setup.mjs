@@ -18,13 +18,15 @@ export function projectCommand(config) {
   if (config.buildPreset === 'iar') return `IarBuild ${quote(config.iarProject)} -build ${quote(config.iarConfig)}`;
   if (config.buildPreset === 'esp-idf') return 'idf.py build';
   if (config.buildPreset === 'cmake') return 'cmake --build build';
+  if (config.buildPreset === 'cargo') return 'cargo build --offline --locked';
+  if (config.buildPreset === 'go') return 'go build ./...';
   if (config.buildPreset === 'gcc') return `cmake --build ${gccDirectory(config)}`;
   return '';
 }
 async function toolStatus(config, root) {
   try {
     if (config.buildPreset === 'gcc') { const tools = await resolveGcc(config, root); await findExecutable('cmake'); await findExecutable('ninja'); return { available: true, executable: tools.compiler, message: '已发现 GCC、CMake 与 Ninja；未执行交叉编译' }; }
-    const executable = config.buildPreset === 'keil' ? await findKeilExecutable(config.keilExecutable) : config.buildPreset === 'iar' ? await findIarExecutable(config.iarExecutable) : config.buildPreset === 'esp-idf' ? (await findIdfInvoker()).script : config.buildPreset === 'none' ? '' : await findExecutable({ arduino: 'arduino-cli', platformio: 'platformio', cmake: 'cmake' }[config.buildPreset]);
+    const executable = config.buildPreset === 'keil' ? await findKeilExecutable(config.keilExecutable) : config.buildPreset === 'iar' ? await findIarExecutable(config.iarExecutable) : config.buildPreset === 'esp-idf' ? (await findIdfInvoker()).script : config.buildPreset === 'none' ? '' : await findExecutable({ arduino: 'arduino-cli', platformio: 'platformio', cmake: 'cmake', cargo: 'cargo', go: 'go' }[config.buildPreset]);
     return { available: !!executable, executable, message: executable ? '已检测到工具；未执行构建' : '未指定构建工具' };
   } catch (error) { return { available: false, executable: '', message: error.message }; }
 }

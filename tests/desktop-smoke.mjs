@@ -1,3 +1,4 @@
+import { electronExecutable } from '../desktop/platform.cjs';
 import { _electron as electron } from 'playwright';
 import assert from 'node:assert/strict';
 import path from 'node:path';
@@ -8,7 +9,7 @@ const environment = { ...process.env };
 const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'signaldesk-desktop-test-'));
 environment.SIGNALDESK_USER_DATA = directory;
 delete environment.ELECTRON_RUN_AS_NODE;
-const desktop = await electron.launch({ executablePath: path.resolve('node_modules/electron/dist/electron.exe'), args: ['.'], cwd: process.cwd(), env: environment, timeout: 30000 });
+const desktop = await electron.launch({ executablePath: electronExecutable(process.cwd()), args: ['.'], cwd: process.cwd(), env: environment, timeout: 30000 });
 try {
   const window = await desktop.firstWindow();
   await window.getByRole('heading', { name: '实时监测', exact: true }).waitFor();
@@ -50,7 +51,7 @@ try {
   await window.getByRole('button', { name: '退出全屏 (Esc / F11)', exact: true }).waitFor(); await key('F11');
   await window.waitForFunction(() => document.querySelector('[aria-label="全屏 (F11)"]'));
   await desktop.evaluate(({ dialog }, directory) => { dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [directory] }); }, directory);
-  await window.locator('.project-summary').click(); await window.getByRole('button', { name: '选择工程目录', exact: true }).click();
+  await window.getByRole('button', { name: '视图', exact: true }).click(); await window.getByRole('menuitem', { name: '连接设置', exact: true }).click(); await window.locator('.project-summary').click(); await window.getByRole('button', { name: '选择工程目录', exact: true }).click();
   assert.equal(await window.getByLabel('设备工程目录', { exact: true }).inputValue(), directory);
   await window.getByRole('dialog', { name: '设备与工程设置' }).screenshot({ path: path.resolve('artifacts/native-project-picker.png') });
   await key('Escape'); await window.getByRole('dialog', { name: '设备与工程设置' }).waitFor({ state: 'hidden' });
@@ -64,14 +65,14 @@ try {
   const imported = await window.evaluate(async () => (await fetch('/api/state')).json());
   assert.equal(imported.config.path, 'unassigned'); assert.equal(imported.connected, false); assert.equal(imported.devices.length, 2);
   await window.getByRole('tab').first().click();
-  await window.getByRole('button', { name: '实时监测', exact: true }).click();
+  await window.getByRole('button', { name: '工具', exact: true }).click(); await window.getByRole('menuitem', { name: '实时监测', exact: true }).click();
   for (const exit of ['Escape', 'F11']) {
     await window.getByRole('button', { name: '全屏波形', exact: true }).click();
     await window.waitForFunction(() => Boolean(document.fullscreenElement));
     await window.getByRole('button', { name: '退出波形全屏 (Esc / F11)', exact: true }).waitFor();
     await key(exit); await window.waitForFunction(() => !document.fullscreenElement);
   }
-  await window.getByRole('button', { name: 'AI 与 Agent', exact: true }).click();
+  await window.getByRole('button', { name: '工具', exact: true }).click(); await window.getByRole('menuitem', { name: 'AI 与 Agent', exact: true }).click();
   await window.getByRole('button', { name: '分析数据', exact: true }).click();
   await window.getByText('本地分析', { exact: true }).waitFor();
   const nextWindow = desktop.waitForEvent('window');

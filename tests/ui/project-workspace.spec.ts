@@ -47,7 +47,7 @@ void loop() {
 test('project import configures serial, source, toolchain and Agent with no secret exposure', async ({ page, project }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await project.call('/ai/config', { model: 'fixture-model', apiStyle: 'chat', apiKey: 'ui-project-secret' });
-  await page.goto(project.url);
+  await page.goto(project.url); await expect(page.locator('.app-shell')).toHaveAttribute('data-ready', 'true'); await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
   await page.getByRole('button', { name: '添加项目', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '添加项目' });
   await dialog.getByLabel('导入工程路径').fill(project.root);
@@ -74,7 +74,7 @@ test('project import configures serial, source, toolchain and Agent with no secr
   await page.getByLabel('搜索源码').fill('loop'); await page.getByLabel('搜索源码').press('Enter');
   await expect(page.getByLabel('跳转源码行')).toHaveValue('12');
   await page.getByRole('button', { name: '交给 Agent 审查', exact: true }).click();
-  const agent = page.getByRole('complementary', { name: 'Agent 分栏' });
+  const agent = page.getByRole('complementary', { name: '属性与 Agent 面板' });
   await expect(agent.getByLabel('Agent 分析请求')).toContainText('src/main.cpp');
   await expect(agent.getByLabel('附带当前文件')).toBeChecked();
   await agent.getByRole('button', { name: '项目体检', exact: true }).click();
@@ -96,8 +96,8 @@ test('project import configures serial, source, toolchain and Agent with no secr
   await expect(page.locator('.bottom-dock').getByLabel('工具链命令', { exact: true })).toHaveValue('platformio run -e "telemetry"');
   await page.screenshot({ path: 'artifacts/ide-source-output.png', fullPage: true });
   await page.getByRole('button', { name: '收起底部面板', exact: true }).click();
-  await page.getByRole('separator', { name: '调整 Agent 分栏宽度' }).press('ArrowLeft');
-  await expect(page.getByRole('separator', { name: '调整 Agent 分栏宽度' })).toHaveAttribute('aria-valuenow', '376');
+  await page.getByRole('separator', { name: '调整属性与 Agent 面板宽度' }).press('ArrowLeft');
+  await expect(page.getByRole('separator', { name: '调整属性与 Agent 面板宽度' })).toHaveAttribute('aria-valuenow', '376');
   await expect(page.locator('body')).not.toContainText('ui-project-secret');
   await page.getByRole('button', { name: '视图', exact: true }).click();
   await expect(page.getByRole('menu', { name: '视图菜单' })).toBeVisible();
@@ -112,7 +112,7 @@ test('IDE source navigation highlights C++, folds functions and opens files by k
   await fs.appendFile(path.join(project.root, 'src/main.cpp'), '\n// Sampling remains non-blocking.\n');
   const plan = await project.call('/projects/prepare', { root: project.root });
   await project.call('/projects/apply', { id: plan.id, targetId: plan.targets[0].id, reuseAI: false });
-  await page.goto(project.url);
+  await page.goto(project.url); await expect(page.locator('.app-shell')).toHaveAttribute('data-ready', 'true'); await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
   await page.keyboard.press('Control+p');
   await expect(page.getByRole('dialog', { name: '快速打开文件' })).toBeVisible();
   await page.getByRole('combobox', { name: '搜索项目文件' }).fill('main.cpp:12');
@@ -151,7 +151,7 @@ test('IDE source navigation highlights C++, folds functions and opens files by k
 
 test('simple mode preserves full layout, exposes instruments on demand and fits mobile', async ({ page, project }) => {
   await project.call('/connect', { path: 'demo' });
-  await page.goto(project.url);
+  await page.goto(project.url); await expect(page.locator('.app-shell')).toHaveAttribute('data-ready', 'true'); await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
   await clickWorkbench(page, '精简模式');
   await expect(page.locator('.connection-sidebar')).not.toBeVisible();
   await expect(page.locator('.measure-panel')).not.toBeVisible();
@@ -164,7 +164,7 @@ test('simple mode preserves full layout, exposes instruments on demand and fits 
   await page.screenshot({ path: 'artifacts/ide-simple-desktop.png', fullPage: true });
   await page.reload(); await expect(page.locator('.app-shell')).toHaveClass(/simple-mode/);
   await clickWorkbench(page, '完整模式');
-  await expect(page.locator('.connection-sidebar')).toBeVisible();
+  await expect(page.locator('.ide-sidebar')).toBeVisible();
   await expect(page.locator('.measure-panel')).toBeVisible();
   await clickWorkbench(page, '展开 Agent 分栏');
   await clickWorkbench(page, '打开底部工具面板');
@@ -196,7 +196,7 @@ test('simple mode preserves full layout, exposes instruments on demand and fits 
 });
 
 test('offline project stays offline and source tabs and Agent tasks follow the device', async ({ page, project }) => {
-  await page.goto(project.url); const original = (await project.call('/state')).activeDevice;
+  await page.goto(project.url); await expect(page.locator('.app-shell')).toHaveAttribute('data-ready', 'true'); await expect(page.locator('#signaldesk-startup')).not.toBeVisible(); const original = (await project.call('/state')).activeDevice;
   await page.getByRole('button', { name: '添加项目', exact: true }).click();
   const dialog = page.getByRole('dialog', { name: '添加项目' });
   await dialog.getByLabel('导入工程路径').fill(project.root); await dialog.getByRole('button', { name: '识别项目', exact: true }).click();

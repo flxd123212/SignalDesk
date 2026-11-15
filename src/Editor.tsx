@@ -2,8 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
-import { javascript } from '@codemirror/lang-javascript';
-import { cpp } from '@codemirror/lang-cpp';
+import { languages, type LanguageId } from './languages';
 import { HighlightStyle, foldGutter, foldKeymap, syntaxHighlighting } from '@codemirror/language';
 import { tags } from '@lezer/highlight';
 import { usePreferences } from './preferences';
@@ -22,7 +21,7 @@ const sourceColors = HighlightStyle.define([
   { tag: tags.invalid, color: '#f28c8c', textDecoration: 'underline' },
 ]);
 
-export function Editor({ value, onChange, readOnly = false, plain = false, line = 0, language, onCursor }: { value: string; onChange: (value: string) => void; readOnly?: boolean; plain?: boolean; line?: number; language?: 'cpp'; onCursor?: (line: number, column: number) => void }) {
+export function Editor({ value, onChange, readOnly = false, plain = false, line = 0, language, onCursor }: { value: string; onChange: (value: string) => void; readOnly?: boolean; plain?: boolean; line?: number; language?: LanguageId; onCursor?: (line: number, column: number) => void }) {
   const container = useRef<HTMLDivElement>(null), view = useRef<EditorView | null>(null), change = useRef(onChange);
   const preferences = usePreferences(), wrapping = useRef(new Compartment());
   const cursor = useRef(onCursor); cursor.current = onCursor;
@@ -30,7 +29,7 @@ export function Editor({ value, onChange, readOnly = false, plain = false, line 
   useEffect(() => {
     if (!container.current) return;
     view.current = new EditorView({ parent: container.current, state: EditorState.create({ doc: value, extensions: [
-      lineNumbers(), history(), ...(language === 'cpp' ? [cpp()] : plain ? [] : [javascript()]), syntaxHighlighting(sourceColors), ...(readOnly ? [foldGutter(), keymap.of(foldKeymap)] : []), highlightActiveLine(), keymap.of([...defaultKeymap, ...historyKeymap]), wrapping.current.of(preferences.editorWrap ? EditorView.lineWrapping : []),
+      lineNumbers(), history(), languages[language || (plain ? 'text' : 'javascript')].extension(), syntaxHighlighting(sourceColors), foldGutter(), keymap.of(foldKeymap), highlightActiveLine(), keymap.of([...defaultKeymap, ...historyKeymap]), wrapping.current.of(preferences.editorWrap ? EditorView.lineWrapping : []),
       EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly), EditorView.contentAttributes.of({ 'aria-label': readOnly ? '项目源码内容' : '代码编辑器', ...(readOnly ? { tabindex: '0' } : {}) }),
       EditorView.updateListener.of(update => { if (update.docChanged) change.current(update.state.doc.toString()); if (update.selectionSet || update.docChanged) { const position = update.state.selection.main.head, current = update.state.doc.lineAt(position); cursor.current?.(current.number, position - current.from + 1); } }),
       EditorView.theme({ '&': { height: '100%', fontSize: '14px', backgroundColor: '#191c20', color: '#cbd4d5' }, '.cm-content': { fontFamily: 'Consolas, monospace', padding: '20px 0' }, '.cm-line': { paddingLeft: '12px', lineHeight: '1.9' }, '.cm-gutters': { backgroundColor: '#191c20', color: '#5e6872', border: 'none', paddingTop: '20px' }, '.cm-activeLine': { backgroundColor: '#22282b' }, '.cm-cursor': { borderLeftColor: '#64d9b4' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: '#31534a' } }, { dark: true }),

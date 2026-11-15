@@ -8,6 +8,8 @@
 .integrated-titlebar.ide-shell .app-header .global-search { height: 27px; }
 .integrated-titlebar.ide-shell .header-right { flex: none; }
 .integrated-titlebar .agent-dock { top: 40px; }
+.integrated-titlebar.ide-shell[data-platform=darwin] .app-header { padding-left: 86px; padding-right: 12px; }
+.integrated-titlebar.ide-shell[data-platform=darwin]:fullscreen .app-header { padding-left: 12px; }
 @media (max-width: 1150px) { .integrated-titlebar .header-breadcrumb, .integrated-titlebar .add-project-button > span, .integrated-titlebar .brand > span { display: none; } .integrated-titlebar .layout-shortcuts { display: none !important; } }
 @media (max-width: 900px) { .integrated-titlebar.ide-shell .app-header { gap: 7px; } .integrated-titlebar .desktop-menus { display: flex; } .integrated-titlebar .compact-menu, .integrated-titlebar .add-project-button { display: none; } }
 .ide-shell { --panel: #1c2025; --panel-raised: #252a30; }

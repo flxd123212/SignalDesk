@@ -2,6 +2,29 @@
 
 日期：2026-11-15（Asia/Shanghai）。测试产物另带运行时间戳。
 
+## 0.1.6 本地安装更新
+
+- `npm run package:win` 通过，生成 0.1.6 安装包和免安装 EXE；资源版本为 0.1.6.0。33 个关键源码与前端资源的 SHA256 和解包目录一致。
+- `npm run test:package` 通过：实际打包 EXE 在隔离目录启动，验证 native 串口枚举、QuickJS、GLB、动态波形、共享仪器窗口、CLI、MCP、Agent 终端、设置重启及示例修改保留。
+- `node tests/portable-smoke.mjs` 通过单文件自解压、隔离数据目录、动态波形、设置保存及正常退出。
+- 0.1.6 安装器以当前用户方式更新到 `%LOCALAPPDATA%/Programs/SignalDesk`，退出码 0；安装后的 ProductVersion 为 0.1.6.0，桌面和开始菜单快捷方式均指向该程序。
+- 安装前后核对 `%APPDATA%/SignalDesk` 内 240 个既有文件的 SHA256，全部一致。未通过启动实际用户工作区执行恢复测试；测试均使用隔离目录，不读取用户真实 API Key。
+- 对实际安装的 EXE 运行 `npm run test:agent-restart` 和 `npm run test:platform-desktop` 均通过，验证系统加密配置、多会话、原生工具上下文、清除操作、离线重启、四工作区快捷键和独立窗口。
+- 发行文件校验值已更新到 `release/SHA256SUMS.txt` 和 `release/release-manifest.json`。本次先更新本机，未上传 GitHub Release；Linux/macOS 仍待原生构建和实测。
+
+## 0.1.6 功能合并：四工作区、硬件关联与跨平台
+
+- 最终 `npm test`：160 项通过，0 失败，2 项 POSIX 进程组取消测试在 Windows 跳过。包含节点模板、生成的 Python/JavaScript 与预览数值对比、网表解析与工程隔离、映射冲突保护、新鲜采样反馈断言、语言构建计划和串口大小写处理。
+- 最终 `npx playwright test`：59 项全部通过，耗时约 4.3 分钟。覆盖四工作区、共用工程树、属性/Agent 切换、独立仪器窗口、节点模板/表单连线/撤销/键盘移动、网表到引脚到源码和反馈测试草稿，以及原有设备、仪器、协议、Agent、主题和编译测试。
+- 初轮发现窄窗口隐藏侧栏时连带隐藏工程绑定弹窗，已将弹窗移到应用根容器，保留主题变量并验证缩放后继续保存；节点画布尺寸改变后重新适应视图。按四工作区更新旧导航测试入口，保留原有行为断言。
+- `npm run build` 通过 TypeScript 与 Vite 构建。仍有前端 chunk 大于 500 kB 的优化提示，不影响此次构建通过，未将其当作性能达标证明。
+- `npm run test:desktop` 通过 Windows 原生窗口、全屏退出、目录选择、波形和独立工作区；`npm run test:agent-restart` 通过系统加密密钥、多会话和工具上下文的实际重启恢复，使用隔离数据目录与本机模型夹具。
+- `npm run test:platform-desktop` 在开发运行时与功能合并阶段的 Windows 解包目录均通过，验证 native 串口模块加载/枚举、QuickJS、工作区快捷键、独立窗口和设置重启。该阶段测试程序位于 `release/platform-check/win-unpacked/SignalDesk.exe`；后续 0.1.6 安装结果见上节。
+- 新增 Windows、Linux、macOS Apple Silicon 与 Intel 的原生 CI 矩阵，配置 AppImage/deb 和 DMG/ZIP。当前主机只能实测 Windows；Linux/macOS CI 尚未执行，也没有这些系统的实物串口、烧录器、系统钥匙串、安装器或签名/公证验证结果。
+- 新截图：`four-workspaces-desktop.png`、`nodes-workbench-desktop.png`、`nodes-workbench-mobile.png`、`hardware-live-map.png`、`project-binding-mobile.png`、`platform-win32-x64-packaged.png`，位于忽略的 `artifacts/`。其中设备与网表来自测试夹具，正式启动仍保持离线。
+
+范围与使用方式见 [工作区说明](WORKSPACES.md) 和 [跨平台适配](CROSS_PLATFORM.md)。硬件联调展示网表连接及绑定遥测，不是电气仿真；当前没有原生 EDA 编辑、ERC/DRC、任意图片自动识图或 SWD/JTAG 调试。
+
 ## 0.1.5 动画与主题验证
 
 - `npm run build` 通过。动画、主题与背景、设置、独立窗口、Agent 终端及工具的 Playwright 专项共 11 项通过，本轮未重跑全部界面用例。

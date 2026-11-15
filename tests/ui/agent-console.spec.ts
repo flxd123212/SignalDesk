@@ -39,7 +39,7 @@ test('terminal Agent supports slash tasks, highlighted code, clipboard, follow c
     expect(file.suggestedFilename()).toMatch(/^signaldesk-agent-.*\.md$/); expect(content).toContain('Serial.begin'); expect(content).toContain('请求模型: console-fixture'); expect(content).toContain('接口返回模型: console-resolved'); expect(content).not.toContain('console-test-secret');
     await page.screenshot({ path: 'artifacts/agent-console-desktop.png', fullPage: true });
     await clickWorkbench(page, '实时监测'); await clickWorkbench(page, '展开 Agent 分栏');
-    const dock = page.getByRole('complementary', { name: 'Agent 分栏', exact: true });
+    const dock = page.getByRole('complementary', { name: '属性与 Agent 面板', exact: true });
     await expect(dock.locator('.console-code')).toBeVisible();
     expect(await dock.locator('.agent-console > .panel-toolbar').evaluate(element => {
       const bounds = element.getBoundingClientRect();

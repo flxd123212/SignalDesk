@@ -1,3 +1,4 @@
+import { electronExecutable } from '../desktop/platform.cjs';
 import { _electron as electron } from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -21,7 +22,7 @@ const model = http.createServer((request, response) => {
   });
 });
 await new Promise(resolve => model.listen(0, '127.0.0.1', resolve));
-const executablePath = path.resolve(process.env.SIGNALDESK_TEST_EXE || 'node_modules/electron/dist/electron.exe');
+const executablePath = path.resolve(process.env.SIGNALDESK_TEST_EXE || electronExecutable(process.cwd()));
 let desktop, window;
 const launch = async () => {
   desktop = await electron.launch({ executablePath, args: process.env.SIGNALDESK_TEST_EXE ? [] : ['.'], cwd: process.cwd(), env: environment, timeout: 60000 });
@@ -32,7 +33,7 @@ const call = async (route, body) => {
   const data = await response.json(); assert.ok(response.ok, data.error || String(response.status)); return data;
 };
 const closeWindow = async () => {
-  const closed = desktop.waitForEvent('close'); await window.close(); await closed; desktop = null;
+  await desktop.close(); desktop = null;
 };
 try {
   await launch();
@@ -57,7 +58,7 @@ try {
   await call('/ai/sessions/select', { id: second.sessionId });
   assert.ok((await call('/ai/state')).messages.some(message => message.content === '另一段需要恢复的会话'));
   await call('/ai/sessions/select', { id: primary });
-  await window.getByRole('button', { name: 'AI 与 Agent', exact: true }).click();
+  await window.getByRole('button', { name: '工具', exact: true }).click(); await window.getByRole('menuitem', { name: 'AI 与 Agent', exact: true }).click();
   await window.getByLabel('Agent 会话', { exact: true }).waitFor();
   await window.waitForFunction(() => document.querySelector('[aria-label="会话保存状态"]')?.textContent?.includes('已保存'));
   await window.screenshot({ path: path.resolve('artifacts/agent-restored-desktop.png') });

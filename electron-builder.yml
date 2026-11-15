@@ -14,7 +14,9 @@ files:
   - desktop/preload.cjs
   - desktop/resources.cjs
   - desktop/appearance.cjs
+  - desktop/platform.cjs
   - desktop/assets/icon.ico
+  - desktop/assets/icon.png
   - package.json
 extraResources:
   - from: firmware-examples
@@ -47,3 +49,17 @@ nsis:
   deleteAppDataOnUninstall: false
 portable:
   artifactName: SignalDesk-Portable-${version}-${arch}.${ext}
+mac:
+  icon: desktop/assets/icon.png
+  category: public.app-category.developer-tools
+  artifactName: SignalDesk-${version}-mac-${arch}.${ext}
+  target: [dmg, zip]
+linux:
+  icon: desktop/assets/icon.png
+  executableName: signaldesk
+  category: Development
+  maintainer: SignalDesk
+  artifactName: SignalDesk-${version}-linux-${arch}.${ext}
+  target: [AppImage, deb]
+deb:
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]

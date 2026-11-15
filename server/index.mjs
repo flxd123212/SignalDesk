@@ -28,6 +28,7 @@ import { WidgetSandbox } from './widgets.mjs';
 import { ProjectSetup } from './project-setup.mjs';
 import { ProjectValidation } from './validation.mjs';
 import { discoverGcc } from './gcc.mjs';
+import { HardwareStore, parseKiCadNetlist, readProjectNetlist, listHardwareFiles, validateHardware, hardwareChecks } from './hardware.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -49,6 +50,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   const external = new ExternalAccess(engine, agent, logs);
   const projects = new ProjectSetup(engine, agent, discovery, workspace, logs);
   const validation = new ProjectValidation(engine, agent, logs);
+  const hardware = new HardwareStore(path.join(directory, '..', 'hardware'));
   if (workspace.failure) logs.write({ level: 'error', category: 'workspace', message: workspace.failure });
   for (const entry of agent.sessions.values()) if (entry.agent.config.apiKey) logs.secrets.add(entry.agent.config.apiKey);
   if (agent.store.status.error || agent.restoreWarning) logs.write({ level: 'error', category: 'agent', message: agent.store.status.error || agent.restoreWarning });
@@ -163,7 +165,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
     else { engine.stopTimedSend(); engine.emitState(); }
     response.json(engine.state());
   });
-  app.post('/api/processing', (request, response) => { engine.setProcessing(request.body); response.json(engine.state()); });
+  app.post('/api/processing', (request, response) => { if (request.body.deviceId && request.body.deviceId !== engine.activeId) throw new Error('当前设备已切换'); engine.setProcessing(request.body); response.json(engine.state()); });
   app.post('/api/testing/graph', (request, response) => response.json(graphTest(request.body)));
   app.post('/api/can/analyze', (request, response) => response.json(analyzeCan(request.body)));
   app.post('/api/widgets/evaluate', async (request, response) => response.json(await widgets.run(request.body)));
@@ -191,7 +193,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.post('/api/modbus/inspect', (request, response) => response.json(inspectModbus(request.body.hex, request.body.direction)));
   app.get('/api/frames/latest', (_request, response) => response.json(engine.parser.lastFrame || null));
   app.get('/api/automation', (_request, response) => response.json(automation.state()));
-  app.post('/api/automation/start', async (request, response) => response.json(await automation.start(engine.active, request.body)));
+  app.post('/api/automation/start', async (request, response) => { if (request.body.deviceId && request.body.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json(await automation.start(engine.active, request.body)); });
   app.post('/api/automation/stop', (_request, response) => { automation.stop(); response.json(automation.state()); });
   app.get('/api/chips', async (_request, response) => response.json({ images: await chips.list(), job: chips.job }));
   app.post('/api/keil/project', async (request, response) => response.json(await readKeilProject(agent.workspace.root, request.body.path)));
@@ -217,6 +219,22 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.get('/api/ai/changes', async (_request, response) => response.json(await agent.workspace.history()));
   app.get('/api/ai/changes/:id', async (request, response) => response.json(await agent.workspace.change(request.params.id)));
   const checkAgentContext = input => { if (input.deviceId && input.deviceId !== engine.activeId) throw new Error('当前设备已切换'); if (input.sessionId && input.sessionId !== agent.active.id) throw new Error('当前会话已切换'); if (input.root && input.root !== agent.workspace.root) throw new Error('当前工程已变化'); };
+  app.get('/api/hardware', async (request, response) => {
+    checkAgentContext(request.query); const projectRoot = agent.workspace.root, deviceId = engine.activeId;
+    const [profile, files] = await Promise.all([hardware.load(projectRoot, deviceId), listHardwareFiles(projectRoot)]);
+    checkAgentContext({ deviceId, root: projectRoot }); response.json({ ...profile, root: projectRoot, files, checks: hardwareChecks(profile, profile.netlist) });
+  });
+  app.post('/api/hardware/save', async (request, response) => {
+    const { deviceId, root: projectRoot, version, profile } = request.body;
+    if (!deviceId || !projectRoot) throw new Error('硬件配置缺少工程与设备上下文'); checkAgentContext(request.body);
+    const saved = await hardware.save(projectRoot, deviceId, version, validateHardware(profile)); response.json({ ...saved, checks: hardwareChecks(saved, saved.netlist) });
+  });
+  app.post('/api/hardware/import', async (request, response) => {
+    const { deviceId, root: projectRoot, version, path: filename, xml, name } = request.body;
+    if (!deviceId || !projectRoot) throw new Error('网表导入缺少工程与设备上下文'); checkAgentContext(request.body);
+    const netlist = filename ? await readProjectNetlist(projectRoot, filename) : parseKiCadNetlist(xml, name);
+    checkAgentContext(request.body); response.json(await hardware.save(projectRoot, deviceId, version, { netlist }));
+  });
   app.post('/api/ai/command/preview', (request, response) => { checkAgentContext(request.body); response.json(commandPlan(request.body.commandLine, agent.workspace.root)); });
   app.post('/api/ai/command/run', async (request, response) => {
     checkAgentContext(request.body);

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { clickWorkbench } from './workbench-actions';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
@@ -13,7 +14,7 @@ test('hot plug opens a dialog across pages, updates removals, binds actual mock 
   const runtime = await startServer({ port: 0, directory: path.join(directory, 'sessions'), Port: SerialPortMock, listPorts: async () => ports });
   try {
     await page.goto(runtime.address); await expect(page.locator('.status-bar')).toContainText('未匹配串口');
-    await page.getByRole('button', { name: 'AI 与 Agent', exact: true }).click();
+    await clickWorkbench(page, 'AI 与 Agent');
     await page.locator('.header-right').getByRole('button', { name: '发现设备', exact: true }).click();
     const dialog = page.getByRole('dialog', { name: '发现设备', exact: true });
     await expect(dialog).toContainText('系统尚未提供可用串口');

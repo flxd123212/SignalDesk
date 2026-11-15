@@ -2,7 +2,8 @@ const { contextBridge, ipcRenderer } = require('electron');
 ipcRenderer.on('desktop:exit-html-fullscreen', () => { if (document.fullscreenElement) void document.exitFullscreen().catch(() => {}); });
 
 contextBridge.exposeInMainWorld('signaldeskDesktop', {
-  integratedTitlebar: process.platform === 'win32',
+  platform: process.platform,
+  integratedTitlebar: true,
   newWindow: () => ipcRenderer.invoke('desktop:new-window'),
   closeWindow: () => ipcRenderer.invoke('desktop:close-window'),
   nativeMenu: kind => ipcRenderer.invoke('desktop:native-menu', kind),

@@ -1,3 +1,4 @@
+import { electronExecutable } from '../desktop/platform.cjs';
 import { _electron as electron } from 'playwright';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
@@ -7,14 +8,14 @@ import os from 'node:os';
 const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'signaldesk-appearance-test-'));
 const environment = { ...process.env, SIGNALDESK_USER_DATA: directory };
 delete environment.ELECTRON_RUN_AS_NODE;
-const executablePath = path.resolve(process.env.SIGNALDESK_TEST_EXE || 'node_modules/electron/dist/electron.exe');
+const executablePath = path.resolve(process.env.SIGNALDESK_TEST_EXE || electronExecutable(process.cwd()));
 let desktop, window;
 const launch = async () => {
   desktop = await electron.launch({ executablePath, args: process.env.SIGNALDESK_TEST_EXE ? [] : ['.'], cwd: process.cwd(), env: environment, timeout: 60000 });
   window = await desktop.firstWindow(); await window.locator('.app-shell').waitFor();
   await window.locator('#signaldesk-startup').waitFor({ state: 'hidden' });
 };
-const close = async () => { const closed = desktop.waitForEvent('close'); await window.close(); await closed; desktop = null; };
+const close = async () => { await desktop.close(); desktop = null; };
 try {
   await launch();
   const state = await window.evaluate(async () => {

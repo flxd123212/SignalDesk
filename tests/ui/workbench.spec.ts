@@ -10,7 +10,7 @@ test.beforeEach(async ({ request }) => {
 test('desktop renders moving multichannel waveforms and sends actual transport bytes', async ({ page, request }) => {
   const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto('/');
-  await expect(page.getByRole('button', { name: '断开连接', exact: true })).toBeEnabled();
+  await expect(page.getByRole('button', { name: '快捷断开设备', exact: true })).toBeEnabled();
   await expect.poll(async () => (await (await request.get('/api/state')).json()).frames, { timeout: 15000 }).toBeGreaterThan(1100);
   await expect(page.locator('.uplot canvas')).toHaveCount(1);
   const pixels = await page.locator('.uplot canvas').evaluate((canvas: HTMLCanvasElement) => {
@@ -41,10 +41,10 @@ test('desktop renders moving multichannel waveforms and sends actual transport b
 test('node graph and formula change the live output channels', async ({ page, request }) => {
   await page.goto('/');
   await clickWorkbench(page, '节点编排');
-  await expect(page.locator('.react-flow__node')).toHaveCount(5);
+  await expect(page.locator('.react-flow__node')).toHaveCount(7);
   await page.getByRole('button', { name: '应用到数据', exact: true }).click();
   await expect.poll(async () => (await (await request.get('/api/state')).json()).processingMode).toBe('graph');
-  await expect.poll(async () => (await (await request.get('/api/state')).json()).names).toEqual(['放大信号', '平滑信号']);
+  await expect.poll(async () => (await (await request.get('/api/state')).json()).names).toEqual(['CH1', 'CH2', 'CH3']);
   await page.screenshot({ path: 'artifacts/graph-desktop.png', fullPage: true });
   await clickWorkbench(page, '解析脚本');
   await page.getByRole('button', { name: '应用公式', exact: true }).click();

@@ -2,9 +2,10 @@ import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { electronExecutable } from './platform.cjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const executable = path.join(root, 'node_modules', 'electron', 'dist', process.platform === 'win32' ? 'electron.exe' : 'electron');
+const executable = electronExecutable(root);
 if (!existsSync(executable)) throw new Error('Electron runtime is missing. Run npm install, then node node_modules/electron/install.js.');
 const environment = { ...process.env };
 delete environment.ELECTRON_RUN_AS_NODE;

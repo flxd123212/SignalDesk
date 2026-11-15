@@ -59,6 +59,11 @@ export class ProjectValidation {
   }
   async capabilities(input) {
     const owner = this.context(input), root = owner.agent.workspace.root, report = await scanProject(root), snapshot = await sourceFingerprint(root), choices = [];
+    const pythonTests = await inside(root, 'tests', true) && (await fs.readdir(path.join(root, 'tests'))).some(name => /^test.*\.py$/i.test(name));
+    if (pythonTests) choices.push({ id: 'python-unittest', label: 'Python · unittest', runner: 'python-unittest', kind: 'test', environment: '', note: '执行工程 tests 目录中的 Python 测试；需要本机 Python 环境。' });
+    if (await inside(root, 'package.json')) choices.push({ id: 'node-test', label: 'JavaScript · Node.js Test', runner: 'node-test', kind: 'test', environment: '', note: '使用 node --test 执行工程测试；不会安装依赖。' });
+    if (await inside(root, 'Cargo.toml')) choices.push({ id: 'cargo-check', label: 'Rust · 测试代码检查', runner: 'cargo-check', kind: 'test-build', environment: '', note: '离线检查测试目标，不运行目标程序；需要已安装依赖及 Cargo.lock。' });
+    if (await inside(root, 'go.mod')) choices.push({ id: 'go-test', label: 'Go · go test', runner: 'go-test', kind: 'test', environment: '', note: '执行工程 Go 测试；构建目标由工程及 Go 环境决定。' });
     if (owner.agent.config.buildPreset !== 'gcc' && await inside(root, 'build/CTestTestfile.cmake')) choices.push({ id: 'ctest', label: 'CTest · 本机测试', runner: 'ctest', kind: 'test', environment: '', note: '运行工程 build 目录中的测试程序；每个用例默认最多 30 秒。' });
     for (const target of report.targets.filter(target => target.kind === 'platformio' && sameRoot(target.root, root))) {
       if (!await inside(root, target.testDirectory, true)) continue;

@@ -63,7 +63,7 @@ try {
   const transport = new StdioClientTransport({ command: external.command, args: [external.bridge], env: clientEnvironment, cwd: directory, stderr: 'pipe' });
   try { await client.connect(transport); assert.ok((await client.listTools()).tools.some(tool => tool.name === 'get_device_snapshot')); }
   finally { await client.close(); }
-  await window.getByRole('button', { name: 'AI 与 Agent', exact: true }).click();
+  await window.getByRole('button', { name: '工具', exact: true }).click(); await window.getByRole('menuitem', { name: 'AI 与 Agent', exact: true }).click();
   await window.locator('.agent-console').waitFor();
   const prompt = window.getByLabel('Agent 分析请求'); await prompt.fill('/');
   await window.getByRole('listbox', { name: 'Agent 斜杠指令' }).waitFor();
@@ -88,7 +88,7 @@ try {
     await call('/ai/config', { ...ai.config, clearKey: true });
   } finally { modelServer.closeAllConnections(); await new Promise(resolve => modelServer.close(resolve)); }
   await window.screenshot({ path: path.resolve('artifacts/packaged-agent-console.png') });
-  await window.getByRole('button', { name: '实时监测', exact: true }).click();
+  await window.getByRole('button', { name: '工具', exact: true }).click(); await window.getByRole('menuitem', { name: '实时监测', exact: true }).click();
   await window.screenshot({ path: path.resolve('artifacts/packaged-desktop.png') });
   await fs.appendFile(path.join(ai.config.root, 'SignalGenerator.ino'), '\n// User modification retained during restart.\n');
   const savedPreferences = JSON.parse(await fs.readFile(path.join(directory, 'preferences.json'), 'utf8'));

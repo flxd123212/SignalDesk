@@ -6,6 +6,7 @@ interface Window {
     preview(preferences: unknown): void;
   };
   signaldeskDesktop?: {
+    platform?: 'win32' | 'darwin' | 'linux';
     integratedTitlebar?: boolean;
     newWindow(): Promise<void>;
     closeWindow(): Promise<void>;

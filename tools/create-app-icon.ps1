@@ -3,7 +3,7 @@ Add-Type -AssemblyName System.Drawing
 $iconDirectory = Join-Path $PSScriptRoot '..\desktop\assets'
 [IO.Directory]::CreateDirectory($iconDirectory) | Out-Null
 $frames = @()
-foreach ($size in @(16, 32, 48, 64, 128, 256)) {
+foreach ($size in @(16, 32, 48, 64, 128, 256, 1024)) {
     $bitmap = New-Object Drawing.Bitmap($size, $size)
     $graphics = [Drawing.Graphics]::FromImage($bitmap)
     $graphics.SmoothingMode = [Drawing.Drawing2D.SmoothingMode]::AntiAlias
@@ -20,8 +20,8 @@ foreach ($size in @(16, 32, 48, 64, 128, 256)) {
     $graphics.DrawLine($pen, 168, 88, 129, 88)
     $stream = New-Object IO.MemoryStream
     $bitmap.Save($stream, [Drawing.Imaging.ImageFormat]::Png)
-    $frames += ,$stream.ToArray()
-    if ($size -eq 256) { $bitmap.Save((Join-Path $iconDirectory 'icon.png'), [Drawing.Imaging.ImageFormat]::Png) }
+    if ($size -le 256) { $frames += ,$stream.ToArray() }
+    if ($size -eq 1024) { $bitmap.Save((Join-Path $iconDirectory 'icon.png'), [Drawing.Imaging.ImageFormat]::Png) }
     $stream.Dispose(); $pen.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
 }
 $output = [IO.File]::Create((Join-Path $iconDirectory 'icon.ico'))

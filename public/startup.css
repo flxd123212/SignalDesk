@@ -13,6 +13,7 @@ html { background: #131719; }
 #signaldesk-startup .boot-topline::before { content: ''; width: 7px; height: 7px; background: var(--boot-accent); }
 #signaldesk-startup .boot-topline span:last-child { margin-left: auto; }
 #signaldesk-startup[data-desktop=true] .boot-topline { padding-right: 152px; -webkit-app-region: drag; }
+#signaldesk-startup[data-platform=darwin] .boot-topline { padding-left: 86px; padding-right: 28px; }
 #signaldesk-startup .boot-center { align-self: center; justify-self: center; width: min(580px, calc(100% - 40px)); text-align: center; padding: 36px 0; }
 #signaldesk-startup .boot-signal { width: 100%; height: auto; display: block; overflow: visible; color: var(--boot-accent); }
 #signaldesk-startup .boot-trace-base { fill: none; stroke: #2d3b3c; stroke-width: 1.3; }

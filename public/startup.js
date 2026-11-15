@@ -38,6 +38,7 @@
     previousFocus = document.activeElement;
     screen.dataset.state = preview ? 'ready' : 'loading';
     screen.dataset.desktop = String(Boolean(window.signaldeskDesktop?.integratedTitlebar));
+    screen.dataset.platform = window.signaldeskDesktop?.platform || 'browser';
     applyPreferences(preferences);
     status.textContent = preview ? '启动动画预览' : '正在加载工作台界面';
     retry.hidden = true; skip.textContent = preview ? '关闭预览' : '跳过动画';

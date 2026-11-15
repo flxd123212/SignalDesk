@@ -6,6 +6,7 @@ import { parseDocument } from 'yaml';
 import { readKeilProject } from './keil.mjs';
 import { readIarProject } from './iar.mjs';
 import { chipFamily } from './catalog.mjs';
+import { portPathKey } from './platform.mjs';
 
 const excluded = /^(node_modules|build|dist|target|Objects|Listings|Debug|Release|Drivers|Middlewares|\.git|\.pio|\.venv)$/i;
 const relative = (root, filename) => path.relative(root, filename).split(path.sep).join('/');
@@ -63,7 +64,7 @@ export async function scanProject(input) {
       if (entry.isSymbolicLink() || excluded.test(entry.name) || entry.name.startsWith('.')) continue;
       const filename = path.join(directory, entry.name);
       if (entry.isDirectory()) { await walk(filename, depth + 1); continue; }
-      if (!entry.isFile() || !/\.(?:ino|c|h|cpp|hpp|cmake|uvprojx?|ewp|ioc|ini|yaml|json)$|^(?:CMakeLists\.txt|sdkconfig(?:\.defaults)?)$/i.test(entry.name)) continue;
+      if (!entry.isFile() || !/\.(?:ino|c|h|cpp|hpp|cmake|uvprojx?|ewp|ioc|ini|yaml|json|rs|py|go|js|ts|toml)$|^(?:go\.mod|CMakeLists\.txt|sdkconfig(?:\.defaults)?)$/i.test(entry.name)) continue;
       const fileStat = await fs.stat(filename);
       if (fileStat.size > (/\.(?:uvprojx?|ewp)$/.test(entry.name) ? 2 * 1024 * 1024 : 256 * 1024)) { warnings.push(`${relative(root, filename)} 超过扫描单文件上限`); continue; }
       const data = await fs.readFile(filename); bytes += data.length;
@@ -105,6 +106,8 @@ export async function scanProject(input) {
     if (!selected(file)) continue;
     const base = path.dirname(path.join(root, file));
     try {
+      if (path.basename(file) === 'Cargo.toml') add({ kind: 'cargo', root: base, file, label: 'Rust / Cargo', entryFile: files.has(relative(root, path.join(base, 'src', 'main.rs'))) ? 'src/main.rs' : 'src/lib.rs', toolchain: { buildPreset: 'cargo' }, evidence: [file], warnings: ['构建目标由 Cargo 配置决定；离线构建需要已有依赖与 Cargo.lock'] });
+      if (path.basename(file) === 'go.mod') add({ kind: 'go', root: base, file, label: 'Go', entryFile: files.has(relative(root, path.join(base, 'main.go'))) ? 'main.go' : '', toolchain: { buildPreset: 'go' }, evidence: [file], warnings: ['Go 构建不等同于 MCU 固件烧录，需按实际目标配置工具链'] });
       if (/\.uvprojx?$/i.test(file)) {
         const project = await readKeilProject(root, file);
         for (const target of project.targets) add({ kind: 'keil', file, label: target.name, chip: target.chip, toolchain: { buildPreset: 'keil', keilProject: file, keilTarget: target.name }, evidence: [`${file} / ${target.name}: ${target.chip || '芯片未指定'}`] });
@@ -184,7 +187,7 @@ export function rankProjectPorts(target, ports, devices, existingId = '') {
     let score = 0, reason = '通用串口，需确认目标设备';
     const existing = devices.find(device => device.id === existingId);
     if (existing?.portBinding && (key ? existing.portBinding.key === key : existing.portBinding.path === port.path)) { score = 100; reason = '已保存的项目设备绑定'; }
-    else if (target.portHint && target.portHint.toLowerCase() === port.path.toLowerCase()) { score = 90; reason = '工程中指定的监测串口'; }
+    else if (target.portHint && portPathKey(target.portHint) === portPathKey(port.path)) { score = 90; reason = '工程中指定的监测串口'; }
     else if (target.chip && identity?.chip && normalize(target.chip) === normalize(identity.chip)) { score = 80; reason = '芯片描述符匹配'; }
     else if (target.family && target.family === identity?.family) { score = 60; reason = '芯片系列匹配，具体开发板需核对'; }
     const conflict = target.family && identity?.family && target.family !== identity.family;

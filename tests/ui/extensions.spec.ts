@@ -18,6 +18,7 @@ test('multiple devices keep collecting and show simultaneous canvases with proje
     await page.goto('/'); await page.getByRole('button', { name: '添加设备', exact: true }).click();
     await expect(page.getByRole('tab')).toHaveCount(2);
     added = (await (await request.get('/api/state')).json()).activeDevice;
+    await clickWorkbench(page, '展开连接设置');
     await page.getByRole('button', { name: '连接设备', exact: true }).click();
     await expect(page.getByRole('button', { name: '断开连接', exact: true })).toBeEnabled();
     await page.locator('.project-summary').click();
@@ -163,7 +164,9 @@ test('all added pages fit desktop and narrow layouts without document overflow',
     await page.setViewportSize(viewport); await page.goto('/');
     for (const name of ['多设备总览', '自定义帧', '自动测试', '芯片与固件', 'AI 与 Agent', '运行日志']) {
       await clickWorkbench(page, name);
-      await expect(page.getByRole('navigation', { name: '工作区导航' }).getByRole('button', { name, exact: true })).toHaveAttribute('aria-current', 'page');
+      if (name === 'AI 与 Agent') await expect(page.locator('.page-agent .agent-console')).toBeVisible();
+      else if (name === '运行日志') await expect(page.locator('.page-logs').getByLabel('搜索日志')).toBeVisible();
+      else await expect(page.getByRole('main').getByRole('heading', { name, exact: true })).toBeVisible();
       await page.waitForTimeout(150);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), name).toBe(true);
       if (name === 'AI 与 Agent' && viewport.width === 390) await page.screenshot({ path: 'artifacts/agent-mobile.png', fullPage: true });

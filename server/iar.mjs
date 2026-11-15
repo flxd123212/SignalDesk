@@ -2,6 +2,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { toolDirectories, executableNames, isExecutable } from './platform.mjs';
 
 const array = value => value === undefined ? [] : Array.isArray(value) ? value : [value];
 export function iarPlan(config, root) {
@@ -26,11 +27,11 @@ export async function readIarProject(root, relative) {
 }
 
 export async function findIarExecutable(supplied = '', command = 'IarBuild') {
-  const basename = command + (process.platform === 'win32' ? '.exe' : '');
-  const candidates = supplied ? [supplied] : [...(process.env.PATH || '').split(path.delimiter).map(folder => path.join(folder.replace(/^"|"$/g, ''), basename)), path.join('D:\\IAR\\common\\bin', basename)];
+  const names = executableNames(command), basename = names[0];
+  const candidates = supplied ? [supplied] : [...toolDirectories(), ...(process.env.IAR_PATH ? [process.env.IAR_PATH] : []), ...(process.platform === 'win32' ? ['D:\\IAR\\common\\bin'] : [])].flatMap(folder => names.map(name => path.join(folder, name)));
   for (const candidate of candidates) {
-    if (!path.isAbsolute(candidate) || path.basename(candidate).toLowerCase() !== basename.toLowerCase()) continue;
-    try { if ((await fs.stat(candidate)).isFile()) return candidate; } catch { /* Continue through configured locations. */ }
+    if (!path.isAbsolute(candidate) || !names.some(name => name.toLowerCase() === path.basename(candidate).toLowerCase())) continue;
+    if (await isExecutable(candidate)) return candidate;
   }
   throw new Error(`未找到 IAR ${basename}，请设置工具路径`);
 }

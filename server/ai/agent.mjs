@@ -103,7 +103,7 @@ export class AgentService extends EventEmitter {
       if (typeof input[key] !== 'string' || input[key].length > 500) throw new Error('AI 设置格式无效');
       next[key] = input[key].trim();
     }
-    if (!API_STYLES.some(item => item.id === next.apiStyle) || !['none', 'arduino', 'platformio', 'esp-idf', 'cmake', 'gcc', 'keil', 'iar'].includes(next.buildPreset)) throw new Error('接口或构建方式无效');
+    if (!API_STYLES.some(item => item.id === next.apiStyle) || !['none', 'arduino', 'platformio', 'esp-idf', 'cmake', 'gcc', 'keil', 'iar', 'cargo', 'go'].includes(next.buildPreset)) throw new Error('接口或构建方式无效');
     next.baseUrl = normalizeBaseUrl(next.baseUrl);
     const problem = protocolProblem(next.baseUrl, next.apiStyle);
     if (problem) throw new Error(problem);

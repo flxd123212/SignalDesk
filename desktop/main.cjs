@@ -4,12 +4,13 @@ const { pathToFileURL } = require('node:url');
 const fs = require('node:fs');
 const { prepareExamples } = require('./resources.cjs');
 const { createBackgroundStore } = require('./appearance.cjs');
+const { windowChrome } = require('./platform.cjs');
 const runtimes = new Set();
 const closingRuntimes = new Set();
 const trustedWindows = new Map();
-let startServer, examplesDirectory, agentEncryption = null, windowNumber = 0, quitting = false;
+let startServer, examplesDirectory, agentEncryption = null, windowNumber = 0, quitting = false, reopening = false;
 app.setName('SignalDesk');
-app.setAppUserModelId('com.signaldesk.workbench');
+if (process.platform === 'win32') app.setAppUserModelId('com.signaldesk.workbench');
 if (process.env.SIGNALDESK_USER_DATA) app.setPath('userData', path.resolve(process.env.SIGNALDESK_USER_DATA));
 
 async function openWindow(existingRuntime, panel) {
@@ -19,11 +20,11 @@ async function openWindow(existingRuntime, panel) {
   const window = new BrowserWindow({
     width: panel ? 1100 : 1500, height: panel ? 800 : 980, minWidth: 720, minHeight: 540,
     show: false, backgroundColor: '#131719', title: `SignalDesk · 工作区 ${number}`,
-    icon: path.join(__dirname, 'assets', 'icon.ico'),
-    ...(process.platform === 'win32' ? { titleBarStyle: 'hidden', titleBarOverlay: { color: '#202429', symbolColor: '#cbd3dc', height: 40 } } : {}),
+    icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
+    ...windowChrome(),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: true, backgroundThrottling: false },
   });
-  if (process.platform === 'win32') window.removeMenu();
+  if (process.platform !== 'darwin') window.removeMenu();
   window.once('ready-to-show', () => { if (!window.isDestroyed()) window.show(); });
   trustedWindows.set(window.webContents.id, { window, origin: runtime.address, runtime, panel });
   const fullscreenState = () => { if (!window.isDestroyed()) window.webContents.send('desktop:fullscreen', window.isFullScreen()); };
@@ -34,7 +35,7 @@ async function openWindow(existingRuntime, panel) {
   window.on('leave-html-full-screen', () => { htmlFullscreen = false; });
   window.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown') return;
-    if (input.control && input.shift && input.key.toLowerCase() === 'n' && !input.isAutoRepeat) { event.preventDefault(); void openWindow().catch(console.error); return; }
+    if ((process.platform === 'darwin' ? input.meta : input.control) && input.shift && input.key.toLowerCase() === 'n' && !input.isAutoRepeat) { event.preventDefault(); void openWindow().catch(console.error); return; }
     if (htmlFullscreen && ['Escape', 'F11'].includes(input.key)) { event.preventDefault(); window.webContents.send('desktop:exit-html-fullscreen'); return; }
     if (input.key === 'Escape' && window.isFullScreen()) {
       event.preventDefault(); window.setFullScreen(false);
@@ -73,9 +74,8 @@ app.whenReady().then(async () => {
   ipcMain.handle('desktop:close-window', event => trustedWindow(event).close());
   ipcMain.handle('desktop:native-menu', (event, kind) => {
     const window = trustedWindow(event);
-    const index = { edit: 1, view: 2 }[kind];
-    if (index === undefined) throw new Error('Unknown menu');
-    Menu.getApplicationMenu()?.items[index]?.submenu?.popup({ window });
+    if (!['edit', 'view'].includes(kind)) throw new Error('Unknown menu');
+    Menu.getApplicationMenu()?.getMenuItemById(kind)?.submenu?.popup({ window });
   });
   const preferencesPath = path.join(app.getPath('userData'), 'preferences.json');
   const backgrounds = createBackgroundStore(path.join(app.getPath('userData'), 'appearance'));
@@ -98,13 +98,18 @@ app.whenReady().then(async () => {
   });
   ipcMain.handle('desktop:open-panel', async (event, panel) => {
     trustedWindow(event);
-    if (!['workspace', 'terminal', 'editor', 'agent', 'attitude', 'graph', 'can', 'commands', 'widgets', 'script', 'instruments', 'sessions', 'frames', 'automation', 'alarms', 'chips', 'overview', 'logs', 'external'].includes(panel)) throw new Error('Unknown work page');
+    if (!['workspace', 'terminal', 'editor', 'agent', 'attitude', 'graph', 'can', 'commands', 'widgets', 'script', 'instruments', 'sessions', 'frames', 'automation', 'alarms', 'chips', 'overview', 'logs', 'external', 'hardware', 'circuit', 'validation'].includes(panel)) throw new Error('Unknown work page');
     const entry = trustedWindows.get(event.sender.id);
     const existing = [...trustedWindows.values()].find(item => item.runtime === entry.runtime && item.panel === panel);
     if (existing) { if (existing.window.isMinimized()) existing.window.restore(); existing.window.focus(); return; }
     await openWindow(entry.runtime, panel);
   });
-  ipcMain.handle('desktop:bluetooth-settings', async event => { trustedWindow(event); if (process.platform !== 'win32') throw new Error('请在系统设置中配对蓝牙设备'); await shell.openExternal('ms-settings:bluetooth'); });
+  ipcMain.handle('desktop:bluetooth-settings', async event => {
+    trustedWindow(event);
+    if (process.platform === 'win32') return shell.openExternal('ms-settings:bluetooth');
+    if (process.platform === 'darwin') { const error = await shell.openPath('/System/Applications/System Settings.app'); if (error) throw new Error(error); return; }
+    throw new Error('请在 Linux 桌面的蓝牙设置中完成配对，并确认已建立 SPP /dev/rfcomm* 串口；BLE GATT 设备不能作为串口连接。');
+  });
   ipcMain.handle('desktop:fullscreen:toggle', event => { const window = trustedWindow(event); window.setFullScreen(!window.isFullScreen()); });
   ipcMain.handle('desktop:choose-directory', async (event, initial) => {
     const window = trustedWindow(event);
@@ -113,9 +118,11 @@ app.whenReady().then(async () => {
   });
   ({ startServer } = await import(pathToFileURL(path.join(__dirname, '../server/index.mjs')).href));
   Menu.setApplicationMenu(Menu.buildFromTemplate([
+    ...(process.platform === 'darwin' ? [{ role: 'appMenu', label: 'SignalDesk' }] : []),
     { label: '文件', submenu: [{ label: '新建独立工作区窗口', accelerator: 'CmdOrCtrl+Shift+N', click: () => openWindow().catch(console.error) }, { role: 'close', label: '关闭当前窗口' }, { role: 'quit', label: '退出全部窗口' }] },
-    { label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
-    { label: '视图', submenu: [{ role: 'reload', label: '重新加载' }, { role: 'togglefullscreen', label: '切换全屏', accelerator: 'F11' }, { label: '退出全屏 (Esc)', click: (_item, window) => window?.setFullScreen(false) }, { role: 'resetZoom', label: '实际大小' }, { role: 'zoomIn', label: '放大' }, { role: 'zoomOut', label: '缩小' }] },
+    { id: 'edit', label: '编辑', submenu: [{ role: 'undo', label: '撤销' }, { role: 'redo', label: '重做' }, { type: 'separator' }, { role: 'cut', label: '剪切' }, { role: 'copy', label: '复制' }, { role: 'paste', label: '粘贴' }, { role: 'selectAll', label: '全选' }] },
+    { id: 'view', label: '视图', submenu: [{ role: 'reload', label: '重新加载' }, { role: 'togglefullscreen', label: '切换全屏', accelerator: process.platform === 'darwin' ? 'Control+Command+F' : 'F11' }, { label: '退出全屏 (Esc)', click: (_item, window) => window?.setFullScreen(false) }, { role: 'resetZoom', label: '实际大小' }, { role: 'zoomIn', label: '放大' }, { role: 'zoomOut', label: '缩小' }] },
+    ...(process.platform === 'darwin' ? [{ role: 'windowMenu', label: '窗口' }] : []),
   ]));
   await openWindow();
 }).catch(error => {
@@ -123,7 +130,12 @@ app.whenReady().then(async () => {
   try { fs.mkdirSync(app.getPath('userData'), { recursive: true }); fs.appendFileSync(path.join(app.getPath('userData'), 'startup-error.log'), `${new Date().toISOString()} ${error.stack || error}\n`); } catch { /* Preserve the original failure. */ }
   dialog.showErrorBox('SignalDesk 启动失败', `${error.message}\n\n日志目录：${app.getPath('userData')}`); app.quit();
 });
-app.on('window-all-closed', () => app.quit());
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('activate', () => {
+  if (!startServer || BrowserWindow.getAllWindows().length || quitting || reopening) return;
+  reopening = true;
+  void Promise.allSettled([...closingRuntimes]).then(() => { if (BrowserWindow.getAllWindows().length || quitting) return; windowNumber = 0; return openWindow(); }).catch(console.error).finally(() => { reopening = false; });
+});
 app.on('before-quit', event => {
   if (quitting || (!runtimes.size && !closingRuntimes.size)) return;
   event.preventDefault(); quitting = true;

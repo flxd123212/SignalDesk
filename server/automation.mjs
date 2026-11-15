@@ -30,7 +30,8 @@ export class TestRunner extends EventEmitter {
     if (engine.sendInterval) throw new Error('请先停止定时发送');
     const plan = validateTest(input), token = randomUUID(), generation = engine.generation;
     const controller = this.controller = new AbortController(); engine.automationLock = token;
-    this.job = { id: token, name: plan.name, target: engine.config.path, status: 'running', results: [], startedAt: new Date().toISOString() };
+    this.job = { id: token, name: plan.name, target: engine.config.path, status: 'running', results: [], startedAt: new Date().toISOString(), sampleRate: engine.config.sampleRate, protocol: engine.config.protocol, processingMode: engine.processingMode };
+    let sentAtFrame = engine.validSamples;
     let received = Buffer.alloc(0);
     const receive = packet => { if (packet.dir === 'RX') received = Buffer.concat([received, Buffer.from(packet.data, 'base64')]).subarray(-65536); };
     const changed = () => { if (!engine.connected || generation !== engine.generation) controller.abort(); };
@@ -49,7 +50,7 @@ export class TestRunner extends EventEmitter {
           const result = { index: index + 1, type: step.type, status: 'running', detail: '' };
           this.job.results.push(result); this.emit('update');
           try {
-            if (step.type === 'send') { received = Buffer.alloc(0); result.detail = `${await engine.send(step, token)} B sent`; }
+            if (step.type === 'send') { received = Buffer.alloc(0); sentAtFrame = engine.validSamples; result.detail = `${await engine.send(step, token)} B sent`; }
             if (step.type === 'wait') await wait(step.ms);
             if (step.type === 'expect') {
               const needle = step.format === 'hex' ? encodePayload({ text: step.contains, format: 'hex' }) : Buffer.from(step.contains);
@@ -59,6 +60,7 @@ export class TestRunner extends EventEmitter {
               received = received.subarray(received.indexOf(needle) + needle.length);
             }
             if (step.type === 'assert') {
+              if (step.fresh && engine.validSamples <= sentAtFrame) throw new Error('指令后未收到新的有效采样数据；请检查设备、数据通道与通信状态');
               const value = engine.latest[step.channel];
               if (!Number.isFinite(value) || value < step.min || value > step.max) throw new Error(`CH${step.channel + 1}=${value ?? '--'}，期望 ${step.min}..${step.max}`);
               result.detail = String(value);

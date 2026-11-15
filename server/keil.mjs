@@ -33,6 +33,7 @@ export async function readKeilProject(root, relative) {
 }
 
 export async function findKeilExecutable(supplied = '') {
+  if (process.platform !== 'win32') throw new Error('Keil µVision 仅支持 Windows；当前系统可读取工程，请改用 GCC/CMake、PlatformIO 或 ESP-IDF 构建。');
   const basename = process.platform === 'win32' ? 'UV4.exe' : 'UV4';
   const candidates = supplied ? [supplied] : [...(process.env.PATH || '').split(path.delimiter).map(folder => path.join(folder.replace(/^"|"$/g, ''), basename)), 'D:\\Keil5 C51\\UV4\\UV4.exe', 'C:\\Keil_v5\\UV4\\UV4.exe', 'C:\\Keil\\UV4\\UV4.exe', 'D:\\Keil_v5\\UV4\\UV4.exe'];
   for (const candidate of candidates) {

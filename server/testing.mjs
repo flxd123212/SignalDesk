@@ -1,17 +1,18 @@
 import { compileGraph } from './processing.mjs';
+import { generateHostGraph } from './graph-codegen.mjs';
 
 const cFloat = value => `${Number(value).toExponential(8)}f`;
 export function graphTest(input) {
   const { graph, sampleRate = 100, duration = 2, raw = [1.65, 25, 50], format = 'arduino', baudRate = 115200 } = input;
   if (!Number.isInteger(sampleRate) || sampleRate < 1 || sampleRate > 1000 || !Number.isFinite(duration) || duration <= 0 || duration > 10 || sampleRate * duration > 4000) throw new Error('本地测试限 1..1000 Hz、10 秒和 4000 个采样点');
   if (!Array.isArray(raw) || !raw.length || raw.length > 16 || raw.some(value => !Number.isFinite(value) || Math.abs(value) > 1e6)) throw new Error('请输入 1..16 个原始通道数值');
-  if (!['arduino', 'c'].includes(format) || ![9600, 57600, 115200, 230400, 460800, 921600, 2000000].includes(baudRate)) throw new Error('代码目标或串口波特率无效');
+  if (!['arduino', 'c', 'python', 'javascript'].includes(format) || ![9600, 57600, 115200, 230400, 460800, 921600, 2000000].includes(baudRate)) throw new Error('代码目标或串口波特率无效');
   const compiled = compileGraph(graph, { sampleRate }), samples = [];
   for (let index = 0; index < Math.ceil(sampleRate * duration); index++) samples.push({ time: index / sampleRate, values: compiled.run(raw) });
   const warnings = [];
   if ((compiled.names.length * 18 + 2) * 10 * sampleRate > baudRate * 0.8) warnings.push('CSV 预计超过当前波特率吞吐量，请降低采样率或提高波特率');
-  const code = generateC(compiled.plan, { sampleRate, raw, format, baudRate });
-  return { names: compiled.names, samples, nodeValues: compiled.latestValues, warnings, code, filename: format === 'arduino' ? 'signaldesk_test.ino' : 'signaldesk_test.c' };
+  const code = ['python', 'javascript'].includes(format) ? generateHostGraph(compiled.plan, { sampleRate, raw, format, duration }) : generateC(compiled.plan, { sampleRate, raw, format, baudRate });
+  return { names: compiled.names, samples, nodeValues: compiled.latestValues, warnings, code, filename: `signaldesk_test.${{ arduino: 'ino', c: 'c', python: 'py', javascript: 'mjs' }[format]}` };
 }
 
 function generateC(plan, { sampleRate, raw, format, baudRate }) {

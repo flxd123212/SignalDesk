@@ -6,9 +6,9 @@ test('settings customize workspace, persist, import/export and render on small s
   await expect(page.locator('.agent-execution')).not.toBeVisible();
   await expect(page.locator('.context-sendbar')).not.toBeVisible();
   await expect(page.locator('.layout-shortcuts')).not.toBeVisible();
-  await expect(page.getByRole('navigation', { name: '工作区导航' }).getByRole('button')).toHaveCount(10);
+  for (const name of ['软件工作区', '硬件工作区', '联调工作区', '测试工作区']) await expect(page.getByRole('button', { name, exact: true })).toBeVisible();
   await page.getByRole('button', { name: '项目体检', exact: true }).click();
-  await expect(page.locator('.agent-message.assistant')).toContainText('项目体检');
+  await expect(page.locator('.agent-message.assistant').last()).toContainText('项目体检');
   await page.screenshot({ path: 'artifacts/settings-agent-clean.png', fullPage: true });
   await page.getByRole('button', { name: /^串口发送/ }).click();
   await expect(page.locator('.context-sendbar')).toBeVisible();
@@ -39,7 +39,8 @@ test('settings customize workspace, persist, import/export and render on small s
   await page.keyboard.press('Escape'); await expect(settings).toHaveCount(0);
   await page.goto('/'); await expect(page.locator('.editor-page')).toBeVisible();
   await expect(page.locator('.app-shell')).toHaveAttribute('data-motion', 'off');
-  await expect(page.getByRole('button', { name: 'CAN 分析', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '联调工作区', exact: true }).click();
+  await expect(page.locator('.workspace-functions').getByRole('button', { name: 'CAN 分析', exact: true })).toBeVisible();
   await expect(page.locator('.app-shell')).toHaveCSS('--accent', '#87bfff');
   await page.getByRole('button', { name: '打开设置', exact: true }).click();
   await settings.getByLabel('界面动画', { exact: true }).check();

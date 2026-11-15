@@ -1,20 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { cppLanguage } from '@codemirror/lang-cpp';
-import { javascriptLanguage } from '@codemirror/lang-javascript';
+import { javascriptLanguage, typescriptLanguage } from '@codemirror/lang-javascript';
+import { pythonLanguage } from '@codemirror/lang-python';
+import { rustLanguage } from '@codemirror/lang-rust';
 import { FileCode2, Search, X } from 'lucide-react';
 import { api } from './data';
 import { IconButton } from './ui';
 
 export type OutlineItem = { name: string; line: number; kind: 'function' | 'type' };
 export function sourceOutline(file: string, content: string): OutlineItem[] {
-  const language = /\.(?:c|h|cc|cpp|cxx|hpp|ino)$/i.test(file) ? cppLanguage : /\.[cm]?jsx?$/i.test(file) ? javascriptLanguage : null;
+  const language = /\.(?:c|h|cc|cpp|cxx|hpp|ino)$/i.test(file) ? cppLanguage : /\.[cm]?jsx?$/i.test(file) ? javascriptLanguage : /\.tsx?$/i.test(file) ? typescriptLanguage : /\.pyi?$/i.test(file) ? pythonLanguage : /\.rs$/i.test(file) ? rustLanguage : null;
   if (!language || !content) return [];
   const symbols: OutlineItem[] = [], tree = language.parser.parse(content);
   tree.iterate({ enter(node) {
-    const type = ['StructSpecifier', 'ClassSpecifier', 'EnumSpecifier', 'ClassDeclaration'].includes(node.name);
-    if (!type && !['FunctionDefinition', 'FunctionDeclaration', 'MethodDeclaration'].includes(node.name)) return;
+    const type = ['StructSpecifier', 'ClassSpecifier', 'EnumSpecifier', 'ClassDeclaration', 'ClassDefinition', 'StructItem', 'EnumItem', 'TraitItem', 'InterfaceDeclaration', 'TypeAliasDeclaration'].includes(node.name);
+    if (!type && !['FunctionDefinition', 'FunctionDeclaration', 'MethodDeclaration', 'FunctionItem'].includes(node.name)) return;
     const definition = node.node.getChild('FunctionDeclarator') || node.node;
-    const name = definition.getChild('Identifier') || definition.getChild('QualifiedIdentifier') || definition.getChild('TypeIdentifier') || definition.getChild('VariableDefinition') || definition.getChild('PropertyDefinition') || definition.getChild('FieldIdentifier');
+    const name = definition.getChild('Identifier') || definition.getChild('QualifiedIdentifier') || definition.getChild('TypeIdentifier') || definition.getChild('VariableDefinition') || definition.getChild('PropertyDefinition') || definition.getChild('FieldIdentifier') || definition.getChild('VariableName');
     if (name && symbols.length < 300) symbols.push({ name: content.slice(name.from, name.to), line: content.slice(0, node.from).split('\n').length, kind: type ? 'type' : 'function' });
   } });
   return symbols;

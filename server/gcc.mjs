@@ -1,6 +1,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
+import { toolDirectories, isExecutable } from './platform.mjs';
 
 const compilerName = /^(?:arm-none-eabi|riscv(?:32|64)?-(?:unknown|none)-elf)-gcc(?:\.exe)?$/i;
 export function gccDirectory(config) { return `build/gcc-${createHash('sha256').update(JSON.stringify([config.gccCompiler || '', config.gccToolchainFile || '', config.buildConfiguration || 'Debug'])).digest('hex').slice(0, 12)}`; }
@@ -20,14 +21,14 @@ export function gccPlan(config, root) {
 
 export async function discoverGcc() {
   const home = process.env.USERPROFILE || process.env.HOME || '';
-  const directories = new Set([...(process.env.PATH || '').split(path.delimiter), process.env.ARM_GCC_PATH, process.env.RISCV_GCC_PATH, 'D:\\DevTools_Hi3861V100_v1.0\\hcc_riscv32_win\\bin', path.join(home, '.platformio', 'packages', 'toolchain-gccarmnoneeabi', 'bin')].filter(Boolean));
-  for (const base of ['C:\\Program Files\\Arm GNU Toolchain arm-none-eabi', 'C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi', 'C:\\Program Files (x86)\\GNU Arm Embedded Toolchain']) {
+  const directories = new Set([...toolDirectories(), process.env.ARM_GCC_PATH, process.env.RISCV_GCC_PATH, 'D:\\DevTools_Hi3861V100_v1.0\\hcc_riscv32_win\\bin', path.join(home, '.platformio', 'packages', 'toolchain-gccarmnoneeabi', 'bin')].filter(Boolean));
+  for (const base of process.platform === 'win32' ? ['C:\\Program Files\\Arm GNU Toolchain arm-none-eabi', 'C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi', 'C:\\Program Files (x86)\\GNU Arm Embedded Toolchain'] : []) {
     try { for (const entry of (await fs.readdir(base, { withFileTypes: true })).slice(0, 30)) if (entry.isDirectory()) directories.add(path.join(base, entry.name, 'bin')); } catch { /* Optional installation directory. */ }
   }
   const found = new Map();
   for (const directory of [...directories].slice(0, 150)) {
     const folder = directory.replace(/^"|"$/g, ''); if (!path.isAbsolute(folder)) continue;
-    try { for (const name of await fs.readdir(folder)) if (compilerName.test(name)) { const filename = await fs.realpath(path.join(folder, name)); if ((await fs.stat(filename)).isFile()) found.set(filename.toLowerCase(), { path: filename, name, family: name.startsWith('arm-') ? 'ARM' : 'RISC-V' }); } } catch { /* Continue through available installations. */ }
+    try { for (const name of await fs.readdir(folder)) if (compilerName.test(name)) { const filename = await fs.realpath(path.join(folder, name)); if (await isExecutable(filename)) found.set(process.platform === 'win32' ? filename.toLowerCase() : filename, { path: filename, name, family: name.startsWith('arm-') ? 'ARM' : 'RISC-V' }); } } catch { /* Continue through available installations. */ }
   }
   return [...found.values()];
 }
@@ -40,10 +41,10 @@ export async function resolveGcc(config, root) {
   if (!compiler) {
     const available = await discoverGcc(), prefix = text.match(/(?:arm-none-eabi|riscv(?:32|64)?-(?:unknown|none)-elf)/i)?.[0];
     const matches = prefix ? available.filter(item => item.name.startsWith(prefix)) : available;
-    if (matches.length !== 1) throw new Error(matches.length ? '发现多个交叉编译器，请在设置中明确选择' : '未找到匹配的 GCC 交叉编译器，请指定 gcc.exe 路径');
+    if (matches.length !== 1) throw new Error(matches.length ? '发现多个交叉编译器，请在设置中明确选择' : '未找到匹配的 GCC 交叉编译器，请指定 ARM 或 RISC-V GCC 可执行文件路径');
     compiler = matches[0].path;
   }
-  if (!path.isAbsolute(compiler) || !compilerName.test(path.basename(compiler)) || !(await fs.stat(compiler)).isFile()) throw new Error('交叉编译器路径无效');
+  if (!path.isAbsolute(compiler) || !compilerName.test(path.basename(compiler)) || !await isExecutable(compiler)) throw new Error('交叉编译器路径无效或没有执行权限');
   const cxx = compiler.replace(/gcc(\.exe)?$/i, 'g++$1');
   return { compiler, cxx, file, directory: gccDirectory(config) };
 }

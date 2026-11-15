@@ -60,7 +60,7 @@ export function compileScript(source) {
 }
 
 export function compileGraph(graph, { sampleRate = 200 } = {}) {
-  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges) || graph.nodes.length > 32 || graph.edges.length > 64) throw new Error('节点图最多支持 32 个节点和 64 条连线');
+  if (!graph || !Array.isArray(graph.nodes) || !Array.isArray(graph.edges) || graph.nodes.length > 64 || graph.edges.length > 128) throw new Error('节点图最多支持 64 个节点和 128 条连线');
   const nodes = new Map();
   const incoming = new Map();
   for (let node of graph.nodes) {
