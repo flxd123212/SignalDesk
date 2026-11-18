@@ -1,6 +1,6 @@
 {
   "name": "signaldesk",
-  "version": "0.1.6",
+  "version": "0.1.10",
   "description": "SignalDesk embedded development and instrumentation workbench",
   "homepage": "https://github.com/flxd123212/SignalDesk",
   "author": "SignalDesk",

@@ -8,8 +8,8 @@ import { WorkbenchMenu } from './WorkbenchMenu';
 import { shortcutLabel } from './platform';
 
 export const workspaces = [
-  { id: 'software', label: '软件', icon: Code2, home: 'editor', pages: ['editor', 'chips', 'script', 'widgets', 'agent', 'external'] },
-  { id: 'hardware', label: '硬件', icon: CircuitBoard, home: 'hardware', pages: ['hardware', 'attitude'] },
+  { id: 'software', label: '软件', icon: Code2, home: 'editor', pages: ['editor', 'tooling', 'chips', 'script', 'widgets', 'agent', 'external'] },
+  { id: 'hardware', label: '硬件', icon: CircuitBoard, home: 'hardware', pages: ['hardware', 'display', 'attitude'] },
   { id: 'integration', label: '联调', icon: Activity, home: 'workspace', pages: ['workspace', 'terminal', 'overview', 'graph', 'circuit', 'commands', 'instruments', 'frames', 'can'] },
   { id: 'testing', label: '测试', icon: FlaskConical, home: 'validation', pages: ['validation', 'automation', 'alarms', 'sessions', 'logs'] },
 ] as const;
@@ -30,5 +30,5 @@ export function ContextProperties({ state, page, configure, openHardware }: { st
 export function ShortcutHelp({ close }: { close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog ref={dialog} className="binding-dialog shortcut-dialog" aria-label="键盘快捷操作" onCancel={close}><div className="panel-toolbar"><span>键盘快捷操作</span><IconButton title="关闭快捷操作" onClick={close}><X size={16} /></IconButton></div><div className="binding-content"><table><tbody>{[['切换软件 / 硬件 / 联调 / 测试', 'Ctrl+Alt+1 / 2 / 3 / 4'], ['查找功能', 'Ctrl+K'], ['快速打开文件', 'Ctrl+P'], ['项目树 / 底部输出', 'Ctrl+B / Ctrl+J'], ['设置', 'Ctrl+,'], ['编译当前工程', 'Ctrl+Shift+B'], ['节点：撤销 / 重做', 'Ctrl+Z / Ctrl+Shift+Z'], ['节点：复制所选 / 全选', 'Ctrl+D / Ctrl+A'], ['节点：添加 / 连接', 'N / C'], ['节点：自动排列 / 适应视图', 'L / F'], ['节点：应用 / 删除所选', 'Ctrl+S / Delete'], ['节点：移动', 'Tab 聚焦，Enter 选择，方向键移动'], ['关闭弹窗 / 退出全屏', 'Esc']].map(([label, key]) => <tr key={label}><td>{label}</td><td><kbd>{shortcutLabel(key)}</kbd></td></tr>)}</tbody></table></div></dialog>;
+  return <dialog ref={dialog} className="binding-dialog shortcut-dialog" aria-label="键盘快捷操作" onCancel={close}><div className="panel-toolbar"><span>键盘快捷操作</span><IconButton title="关闭快捷操作" onClick={close}><X size={16} /></IconButton></div><div className="binding-content"><table><tbody>{[['当前页面帮助', 'F1'], ['切换软件 / 硬件 / 联调 / 测试', 'Ctrl+Alt+1 / 2 / 3 / 4'], ['查找功能', 'Ctrl+K'], ['快速打开文件', 'Ctrl+P'], ['项目树 / 底部输出', 'Ctrl+B / Ctrl+J'], ['设置', 'Ctrl+,'], ['编译当前工程', 'Ctrl+Shift+B'], ['节点：撤销 / 重做', 'Ctrl+Z / Ctrl+Shift+Z'], ['节点：复制所选 / 全选', 'Ctrl+D / Ctrl+A'], ['节点：添加 / 连接', 'N / C'], ['节点：自动排列 / 适应视图', 'L / F'], ['节点：应用 / 删除所选', 'Ctrl+S / Delete'], ['节点：移动', 'Tab 聚焦，Enter 选择，方向键移动'], ['关闭弹窗 / 退出全屏', 'Esc']].map(([label, key]) => <tr key={label}><td>{label}</td><td><kbd>{shortcutLabel(key)}</kbd></td></tr>)}</tbody></table></div></dialog>;
 }

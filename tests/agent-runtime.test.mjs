@@ -110,17 +110,19 @@ test('read-only mode limits advertised and executed tools even when a provider i
   await assert.rejects(agent.tool('propose_build', {}, { readOnly: true }), /只读/);
 });
 
-test('three identical tool requests stop the loop before the third execution', async context => {
+test('three identical tool requests stop repeated execution and request a bounded summary', async context => {
   let calls = 0;
-  const agent = await fixture(context, async () => { calls++; return toolResult(); });
-  await assert.rejects(agent.run({ mode: 'ai' }), /相同工具/);
-  assert.equal(calls, 3); assert.equal(agent.messages.filter(message => message.role === 'tool').length, 2); assert.equal(agent.progress.phase, 'error');
+  const agent = await fixture(context, async ({ tools }) => { calls++; return tools.length ? toolResult() : answer; });
+  await agent.run({ mode: 'ai' });
+  assert.equal(calls, 4); assert.equal(agent.messages.filter(message => message.tool?.status === 'completed').length, 2);
+  assert.equal(agent.progress.phase, 'paused'); assert.equal(agent.state().canResume, true);
+  assert.ok(agent.messages.some(message => message.content.includes('相同工具')));
 });
 
 test('last permitted step disables tools and requests an honest completion summary', async context => {
   let calls = 0;
   const agent = await fixture(context, async ({ tools, messages }) => { if (++calls === 1) return toolResult(); assert.deepEqual(tools, []); assert.match(messages[0].content, /Step budget reached/); return answer; });
-  await agent.run({ mode: 'ai', maxSteps: 2 }); assert.equal(calls, 2); assert.equal(agent.progress.phase, 'complete'); assert.match(agent.progress.detail, /步骤上限/);
+  await agent.run({ mode: 'ai', maxSteps: 2 }); assert.equal(calls, 2); assert.equal(agent.progress.phase, 'paused'); assert.match(agent.progress.detail, /步上限/);
   await assert.rejects(agent.run({ mode: 'ai', maxSteps: 99 }), /上限/);
 });
 

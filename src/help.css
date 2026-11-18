@@ -1,0 +1,77 @@
+.help-center { width: min(960px, calc(100vw - 32px)); height: min(760px, calc(100dvh - 48px)); padding: 0; color: #dbe2e9; background: #202429; border: 1px solid #4b535c; border-radius: 7px; box-shadow: 0 24px 80px #0008; overflow: hidden; }
+.help-center[open] { display: flex; flex-direction: column; }
+.help-center::backdrop { background: #080b10a8; backdrop-filter: blur(3px); }
+.help-header { min-height: 54px; display: flex; align-items: center; gap: 11px; padding: 0 20px; border-bottom: 1px solid #373f48; }
+.help-header > svg { color: var(--accent); }
+.help-header h2 { font-size: 16px; font-weight: 600; margin: 0; }
+.help-header > span { font-size: 11px; color: #90a0af; margin-left: auto; }
+.help-body { min-height: 0; flex: 1; display: grid; grid-template-columns: 230px minmax(0, 1fr); }
+.help-library { min-width: 0; overflow: auto; padding: 17px 12px; background: #1b1f24; border-right: 1px solid #353d46; }
+.help-search { display: flex; align-items: center; gap: 7px; padding: 0 9px; min-height: 35px; border: 1px solid #414b56; border-radius: 4px; color: #9aabbc; }
+.help-search:focus-within { border-color: var(--accent); }
+.help-search input { width: 100%; min-width: 0; background: none; border: 0; padding: 0; font-size: 12px; box-shadow: none; }
+.help-search input:focus { outline: none; }
+.help-library-status { padding: 18px 9px 11px; color: #8e9cab; font-size: 11px; }
+.help-library nav { display: grid; gap: 4px; }
+.help-library nav button { display: flex; align-items: stretch; flex-direction: column; gap: 6px; text-align: left; min-height: 65px; padding: 11px 10px; border: 1px solid transparent; border-radius: 4px; }
+.help-library nav button[aria-current=page] { background: #2c343c; border-color: #414d57; box-shadow: inset 2px 0 var(--accent); }
+.help-guide-name { display: flex; align-items: center; justify-content: space-between; gap: 6px; font-size: 12px; color: #d4dee8; }
+.help-guide-name svg { color: var(--accent); flex: none; }
+.help-library nav small { font-size: 11px; color: #93a0ae; }
+.help-library nav .help-advanced-toggle { min-height: 36px; flex-direction: row; align-items: center; justify-content: space-between; font-size: 11px; color: #a8bbcc; border-top: 1px solid #3b4650; border-radius: 0; margin-top: 7px; }
+.help-no-results { padding: 4px 9px; color: #a4b0bd; font-size: 12px; line-height: 1.8; }
+.help-lesson { min-width: 0; min-height: 0; display: flex; flex-direction: column; }
+.help-lesson-scroll { flex: 1; min-height: 0; padding: 28px 32px; overflow: auto; scroll-behavior: auto; }
+.help-lesson-heading { position: relative; }
+.help-lesson-heading > span { font-size: 11px; color: #91a1b1; }
+.help-lesson-heading h3 { font-size: 22px; margin: 10px 0; font-weight: 600; }
+.help-lesson-heading > p { color: #a3b0bf; font-size: 12px; margin: 0 0 24px; line-height: 1.8; }
+.help-lesson-heading .help-finished { float: right; display: inline-flex; align-items: center; gap: 4px; color: var(--accent); }
+.help-steps { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; padding: 0 0 22px; margin: 0 0 24px; list-style: none; border-bottom: 1px solid #39414a; }
+.help-steps button { display: flex; justify-content: flex-start; gap: 8px; padding: 4px 0; text-align: left; color: #98a5b3; font-size: 11px; width: 100%; line-height: 1.5; }
+.help-steps button > span:first-child { display: grid; place-items: center; width: 22px; height: 22px; border: 1px solid #49535f; border-radius: 50%; flex: none; font-size: 10px; }
+.help-steps button[aria-current=step] { color: #edf2f6; }
+.help-steps button[aria-current=step] > span:first-child { background: var(--accent); color: var(--accent-ink, #152324); border-color: var(--accent); }
+.help-step { overflow-wrap: anywhere; }
+.help-step-number { color: var(--accent); font: 11px var(--mono); }
+.help-step h4 { font-size: 18px; margin: 12px 0; font-weight: 550; }
+.help-step > p { font-size: 13px; line-height: 1.95; margin: 0 0 20px; color: #c3ced9; }
+.help-step pre { background: #181c20; border: 1px solid #3b4650; border-radius: 4px; padding: 14px; overflow: auto; color: #b9d99b; font-size: 12px; }
+.help-expectation, .help-caution { display: flex; align-items: flex-start; gap: 10px; padding: 14px 0; border-top: 1px solid #35404a; }
+.help-expectation > svg { color: var(--accent); flex: none; margin-top: 2px; }
+.help-expectation strong { font-size: 12px; font-weight: 500; }
+.help-expectation p, .help-caution p { font-size: 12px; line-height: 1.8; margin: 5px 0 0; color: #aebdcb; }
+.help-caution { padding: 8px 0 18px; border: 0; }
+.help-caution > svg { color: #e8bd78; flex: none; margin-top: 4px; }
+.help-caution p { margin: 0; color: #b8ab93; }
+.help-action { margin-top: 8px; min-height: 36px; padding: 8px 14px; font-size: 12px; }
+.help-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 14px 20px; border-top: 1px solid #39424c; background: #22282e; }
+.help-footer button { min-height: 33px; font-size: 12px; gap: 7px; padding: 6px 11px; }
+.help-step-count { margin-right: auto; font: 11px var(--mono); color: #98aabb; }
+.learning-bar { display: flex; flex: none; align-items: center; gap: 13px; padding: 8px 20px; min-height: 46px; border-bottom: 1px solid #3d4a52; background: #252e32; color: #cfdae3; }
+.learning-bar > svg { color: var(--accent); flex: none; }
+.learning-bar > div { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 15px; min-width: 0; }
+.learning-bar strong { font-size: 12px; font-weight: 500; }
+.learning-bar > div > span { font-size: 11px; color: #9daebc; }
+.learning-bar > button.quiet-button { margin-left: auto; font-size: 12px; padding: 5px 9px; flex: none; }
+.learning-bar > .icon-button { flex: none; }
+.learning-active { background: #252a30; }
+@media (max-width: 650px) {
+  .help-center { width: calc(100vw - 16px); height: calc(100dvh - 20px); }
+  .help-header { padding: 0 14px; }
+  .help-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); }
+  .help-library { padding: 10px; border-right: 0; border-bottom: 1px solid #39414a; overflow: hidden; }
+  .help-library-status { display: none; }
+  .help-library nav { display: flex; overflow-x: auto; gap: 6px; margin-top: 9px; padding-bottom: 3px; }
+  .help-library nav button { min-width: 155px; min-height: 48px; padding: 8px; gap: 4px; }
+  .help-library nav small { font-size: 10px; }
+  .help-lesson-scroll { padding: 20px 18px; }
+  .help-lesson-heading h3 { font-size: 20px; }
+  .help-steps { gap: 5px; margin-bottom: 18px; padding-bottom: 17px; }
+  .help-footer { padding: 10px; gap: 5px; }
+  .help-footer button { padding: 6px 8px; font-size: 11px; }
+  .learning-bar { padding: 7px 10px; gap: 7px; }
+  .learning-bar > div > span { display: none; }
+  .learning-bar strong { font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) { .help-center *, .learning-bar * { animation: none !important; transition: none !important; } }

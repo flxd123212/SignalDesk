@@ -1,5 +1,20 @@
 import { test, expect } from '@playwright/test';
 
+test('instrument finish switches independently of the accent and restores across reload', async ({ page }) => {
+  await page.goto('/');
+  const shell = page.locator('.app-shell');
+  await expect(shell).toHaveAttribute('data-finish', 'lab');
+  await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
+  await page.keyboard.press('Control+,');
+  const settings = page.getByRole('dialog', { name: '设置', exact: true });
+  await settings.getByRole('button', { name: '主题与背景', exact: true }).click();
+  await settings.getByRole('button', { name: '深色石墨', exact: true }).click();
+  await expect(shell).toHaveAttribute('data-finish', 'graphite');
+  await page.reload();
+  await expect(shell).toHaveAttribute('data-finish', 'graphite');
+  await expect(shell).toHaveCSS('--accent', '#73d8bb');
+});
+
 test('custom colors and local background persist without storing image data in preferences', async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('#signaldesk-startup')).not.toBeVisible();

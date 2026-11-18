@@ -7,10 +7,29 @@ import type { AppState, Port, PortSnapshot } from './types';
 import './discovery.css';
 
 const identity = (port: Port) => JSON.stringify([port.path, port.identification?.key || '', port.vendorId || '', port.productId || '']);
+interface UsbBoard { key: string; name: string; kind: string; vid: string; pid: string; descriptor: string }
 export function DeviceDiscovery({ state, online, detached, addProject, notify }: { state: AppState; online: boolean; detached: boolean; addProject: () => void; notify: (message: string, error?: boolean) => void }) {
   const [opened, setOpened] = useState<{ path: string; automatic: boolean } | null>(null);
   const queued = useRef<string[]>([]), latestPorts = usePorts(), latest = useRef(latestPorts);
   latest.current = latestPorts;
+  const [boards, setBoards] = useState<UsbBoard[]>([]), [usbError, setUsbError] = useState('');
+  const [scanCount, rescan] = useState(0), pendingUsb = useRef<string[]>([]), knownUsb = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!online) return;
+    let live = true, timer: ReturnType<typeof setTimeout>;
+    async function scan() {
+      try {
+        const next = await api<UsbBoard[]>('/usb/boards');
+        if (!live) return;
+        const ids = new Set(next.map(board => board.key));
+        pendingUsb.current = pendingUsb.current.filter(key => ids.has(key));
+        if (knownUsb.current && !detached && getPreferences().devicePopup) pendingUsb.current.push(...next.filter(board => !knownUsb.current!.has(board.key)).map(board => board.key));
+        knownUsb.current = ids; setBoards(next); setUsbError('');
+      } catch (err) { if (live) setUsbError((err as Error).message); }
+      if (live) timer = setTimeout(scan, 6500);
+    }
+    void scan(); return () => { live = false; clearTimeout(timer); };
+  }, [online, detached, scanCount]);
   useEffect(() => {
     const manual = () => { queued.current = []; setOpened({ path: '', automatic: false }); };
     const change = (event: Event) => {
@@ -19,18 +38,19 @@ export function DeviceDiscovery({ state, online, detached, addProject, notify }:
       queued.current = [...new Set([...queued.current, ...(value.added || []).map(port => port.path)])];
     };
     const timer = setInterval(() => {
-      if (!getPreferences().devicePopup) { queued.current = []; return; }
+      if (!getPreferences().devicePopup) { queued.current = []; pendingUsb.current = []; return; }
       queued.current = queued.current.filter(path => latest.current.ports.some(port => port.path === path));
-      if (!queued.current.length || document.querySelector('dialog[open], [role="dialog"], [role="menu"]') || document.fullscreenElement) return;
+      if ((!queued.current.length && !pendingUsb.current.length) || document.querySelector('dialog[open], [role="dialog"], [role="menu"]') || document.fullscreenElement) return;
+      pendingUsb.current = [];
       const path = queued.current[0]; queued.current = []; setOpened({ path, automatic: true });
     }, 400);
     window.addEventListener('signaldesk-discover-devices', manual); window.addEventListener('signaldesk-port-change', change);
     return () => { clearInterval(timer); window.removeEventListener('signaldesk-discover-devices', manual); window.removeEventListener('signaldesk-port-change', change); };
   }, [detached]);
-  return opened && <DiscoveryDialog state={state} online={online} initial={opened.path} automatic={opened.automatic} close={() => { queued.current = []; setOpened(null); }} addProject={() => { queued.current = []; setOpened(null); addProject(); }} notify={notify} />;
+  return opened && <DiscoveryDialog boards={boards} usbError={usbError} scanUsb={() => rescan(i => i + 1)} state={state} online={online} initial={opened.path} automatic={opened.automatic} close={() => { queued.current = []; pendingUsb.current = []; setOpened(null); }} addProject={() => { queued.current = []; setOpened(null); addProject(); }} notify={notify} />;
 }
 
-function DiscoveryDialog({ state, online, initial, automatic, close, addProject, notify }: { state: AppState; online: boolean; initial: string; automatic: boolean; close: () => void; addProject: () => void; notify: (message: string, error?: boolean) => void }) {
+function DiscoveryDialog({ boards, usbError, scanUsb, state, online, initial, automatic, close, addProject, notify }: { boards: UsbBoard[]; usbError: string; scanUsb: () => void; state: AppState; online: boolean; initial: string; automatic: boolean; close: () => void; addProject: () => void; notify: (message: string, error?: boolean) => void }) {
   const dialog = useRef<HTMLDialogElement>(null), snapshot = usePorts(), prefs = usePreferences();
   const [selected, setSelected] = useState(() => snapshot.ports.find(port => port.path === initial) || snapshot.ports[0]);
   const owner = (port?: Port) => state.devices?.find(device => !!port && (device.portBinding?.key && device.portBinding.key === port.identification?.key || device.portBinding?.path === port.path));
@@ -48,7 +68,7 @@ function DiscoveryDialog({ state, online, initial, automatic, close, addProject,
     const config = id === state.activeDevice ? state.config : device?.projectProfile?.serial;
     setBaud(config?.baudRate || 115200); setProtocol(config?.protocol || 'raw'); setError('');
   };
-  const refresh = async () => { setRefreshing(true); setError(''); try { await refreshPorts(); } catch (error) { setError((error as Error).message); } finally { setRefreshing(false); } };
+  const refresh = async () => { setRefreshing(true); setError(''); scanUsb(); try { await refreshPorts(); } catch (error) { setError((error as Error).message); } finally { setRefreshing(false); } };
   const stale = expectedActive.current !== state.activeDevice || target !== 'new' && (!active || active.projectRoot !== root.current);
   const occupied = active?.connected || active?.busy || active?.recording;
   const disabled = busy || !online || !port || !!snapshot.error || stale || !!occupied || !Number.isInteger(baud) || baud < 50 || baud > 12000000;
@@ -64,7 +84,8 @@ function DiscoveryDialog({ state, online, initial, automatic, close, addProject,
     <div className="discovery-body"><div className="discovery-toolbar"><span>{snapshot.error ? '检测失败' : !snapshot.initialized ? '正在检测系统串口' : '系统串口'}</span><button className="quiet-button" disabled={refreshing || busy || !online} onClick={() => void refresh()}><RefreshCw size={14} className={refreshing ? 'spin' : ''} />重新检测</button></div>
       {snapshot.error && <p role="alert" className="discovery-error">{snapshot.error}。以下为上次检测结果。</p>}
       <div className="discovery-port-list" role="listbox" aria-label="发现的串口">{snapshot.ports.map(item => <button role="option" aria-selected={!!selected && identity(item) === identity(selected)} key={identity(item)} disabled={busy} onClick={() => { setSelected(item); const bound = owner(item); if (bound) chooseTarget(bound.id); setError(''); }}><Plug size={17} /><span><strong>{item.path}</strong><small>{item.friendlyName || item.identification?.interface || item.manufacturer || '串口接口'}</small></span>{owner(item) && <em>{owner(item)?.name}</em>}{selected && identity(item) === identity(selected) && <Check size={16} />}</button>)}</div>
-      {!snapshot.ports.length && snapshot.initialized && !snapshot.error && <div className="discovery-empty"><Cable size={30} /><h3>系统尚未提供可用串口</h3><p>请检查设备供电、USB 数据线和系统设备管理器中的端口。未枚举为 COM 的 USB 设备暂不在此列表中。</p></div>}
+      {!snapshot.ports.length && snapshot.initialized && !snapshot.error && <p className="muted">系统尚未提供可用串口</p>}
+      <details open={!!boards.length || undefined}><summary>USB 开发板与调试探针 · {boards.length}</summary>{usbError && <p role="alert">USB 枚举失败：{usbError}</p>}{boards.map(b => <div className="tool-record" key={b.key}><div><strong>{b.name}</strong><small>{b.kind} · {b.vid}:{b.pid}</small></div></div>)}{!boards.length && !usbError && <p className="muted">尚未发现支持的 USB 调试接口。</p>}{boards.some(b => b.kind.includes('探针')) && <small>探针已识别。目标板型号需结合工程确认。</small>}</details>
       {selected && <><dl className="discovery-identity"><dt>接口</dt><dd>{selected.identification?.interface || '串口'}</dd><dt>芯片 / 开发板</dt><dd>{selected.identification?.board || selected.identification?.chip || '未确认'}{!selected.identification?.chip && <small>USB 转串口接口不能确定下游芯片型号</small>}</dd><dt>USB 标识</dt><dd>{selected.vendorId || '--'} : {selected.productId || '--'}</dd><dt>设备序列号</dt><dd>{selected.serialNumber || '未提供，仅按端口绑定'}</dd></dl>
         {!port && <p role="alert" className="discovery-error">所选串口已移除或身份变化，请重新选择。</p>}
         <Field label="绑定到设备与工程"><select aria-label="发现设备绑定目标" disabled={busy} value={target} onChange={event => chooseTarget(event.target.value)}><option value="new">新建设备</option>{state.devices?.map(device => <option key={device.id} value={device.id}>{device.name}{device.projectRoot ? ` · ${device.projectRoot.split(/[\\/]/).pop()}` : ''}{device.connected ? ' · 已连接' : ''}</option>)}</select></Field>
@@ -74,7 +95,7 @@ function DiscoveryDialog({ state, online, initial, automatic, close, addProject,
         {stale && <p role="alert" className="discovery-error">设备或工程已切换，请重新打开此弹窗。</p>}
       </>}
       {error && <p role="alert" className="discovery-error">{error}</p>}
-      <label className="checkbox discovery-preference"><input type="checkbox" checked={prefs.devicePopup} onChange={event => setPreferences({ devicePopup: event.target.checked })} />插入新串口时弹窗</label>
+      <label className="checkbox discovery-preference"><input type="checkbox" checked={prefs.devicePopup} onChange={event => setPreferences({ devicePopup: event.target.checked })} />插入串口或 USB 开发设备时弹窗</label>
     </div><footer><button className="quiet-button" disabled={busy} onClick={addProject}><FolderPlus size={15} />添加工程</button><div><button className="quiet-button" disabled={disabled} onClick={() => void attach(false)}>仅绑定</button><button className="primary" disabled={disabled} onClick={() => void attach(true)}><Plug size={15} />{busy ? '处理中' : '绑定并连接'}</button></div></footer>
   </dialog>;
 }

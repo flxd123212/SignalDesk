@@ -1,10 +1,11 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Check, Circle, Clock3, Copy, FileCode2, ListChecks, LoaderCircle, ShieldCheck, Wrench, X } from 'lucide-react';
 import { IconButton } from './ui';
 
 export type TaskStep = { title: string; status: 'pending' | 'in_progress' | 'completed' | 'skipped' };
 export type ToolEvent = { name: string; status: string; input: string; output: string; durationMs: number; root: string; locations: { path: string; line: number }[] };
 const tools: Record<string, [string, string]> = {
+  inspect_development_environment: ['开发环境检查', '读取本机工具链或 USB 开发板、探针与启动模式'],
   get_device_snapshot: ['设备数据快照', '连接、通道统计与有界采样窗口'], list_firmware_files: ['列出项目文件', '工程范围内的源码文件'],
   read_firmware_file: ['读取完整源码', 'UTF-8 正文与 SHA256'], search_firmware: ['搜索源码内容', '匹配文字、文件与行号'],
   get_build_status: ['构建输出', '实际状态、退出码与输出尾部'], get_project_overview: ['项目概览', '文件类型、开发板信息与构建目标'],
@@ -34,9 +35,10 @@ export function AgentTaskPlan({ steps, busy, clear }: { steps: TaskStep[]; busy:
 }
 
 export function AgentToolbox({ capabilities, readOnly, includeLogs, close }: { capabilities: { name: string; readOnly: boolean }[]; readOnly: boolean; includeLogs: boolean; close: () => void }) {
+  const [group, setGroup] = useState('all');
   const dialog = useRef<HTMLDialogElement>(null);
   useEffect(() => { const previous = document.activeElement; dialog.current?.showModal(); return () => { dialog.current?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); }; }, []);
-  return <dialog ref={dialog} className="agent-toolbox" aria-label="Agent 工具箱" onCancel={close}><header><Wrench size={16} /><h3>Agent 工具箱</h3><span>{capabilities.length} 个工具</span><IconButton title="关闭工具箱" onClick={close}><X size={16} /></IconButton></header><div className="agent-toolbox-list">{capabilities.map(tool => {
+  return <dialog ref={dialog} className="agent-toolbox" aria-label="Agent 工具箱" onCancel={close}><header><Wrench size={16} /><h3>Agent 工具箱</h3><span>{capabilities.length} 个工具</span><IconButton title="关闭工具箱" onClick={close}><X size={16} /></IconButton></header><nav className="agent-tool-filter" aria-label="工具权限筛选">{[['all','全部'],['read','观察与诊断'],['propose','修改与执行']].map(([id,label]) => <button key={id} aria-pressed={group===id} onClick={() => setGroup(id)}>{label}</button>)}</nav><div className="agent-toolbox-list">{capabilities.filter(tool => group === 'all' || (group === 'read') === tool.readOnly).map(tool => {
     const unavailable = readOnly && !tool.readOnly || tool.name === 'get_serial_logs' && !includeLogs;
     return <div className={unavailable ? 'unavailable' : ''} key={tool.name}><div><b>{tools[tool.name]?.[0] || tool.name}</b><small>{!tool.readOnly ? <ShieldCheck size={12} /> : <Clock3 size={12} />}{!tool.readOnly ? readOnly ? '只读模式不可用' : '确认后执行' : tool.name === 'get_serial_logs' && !includeLogs ? '需附带原始日志' : '已启用'}</small></div><p>{tools[tool.name]?.[1]}</p><code>{tool.name}</code></div>;
   })}</div></dialog>;

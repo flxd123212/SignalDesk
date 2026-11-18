@@ -34,7 +34,7 @@ test('hot plug opens a dialog across pages, updates removals, binds actual mock 
     await runtime.engine.disconnect();
     ports = []; await expect.poll(() => runtime.discovery.snapshot.ports.length).toBe(0);
     ports = [usb]; await expect(dialog).toBeVisible();
-    await dialog.getByLabel('插入新串口时弹窗').uncheck();
+    await dialog.getByLabel('插入串口或 USB 开发设备时弹窗').uncheck();
     await dialog.getByRole('button', { name: '关闭设备发现', exact: true }).click();
     ports = []; await expect.poll(() => runtime.discovery.snapshot.ports.length).toBe(0);
     ports = [usb]; await expect.poll(() => runtime.discovery.snapshot.ports.length).toBe(1);

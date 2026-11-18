@@ -29,7 +29,7 @@ test('Agent displays tool results, plans, source links, history search and capab
     await page.goto('/?view=agent');
     await page.getByRole('button', { name: 'Agent 工具箱', exact: true }).click();
     const toolbox = page.getByRole('dialog', { name: 'Agent 工具箱', exact: true });
-    await expect(toolbox).toContainText('18 个工具'); await expect(toolbox).toContainText('需附带原始日志');
+    await expect(toolbox).toContainText('19 个工具'); await expect(toolbox).toContainText('需附带原始日志');
     await page.screenshot({ path: 'artifacts/agent-toolbox-desktop.png', animations: 'disabled' });
     await page.keyboard.press('Escape'); await expect(toolbox).toHaveCount(0);
     const input = page.getByLabel('Agent 分析请求'); await input.fill('检查 main.c 并提供局部修改计划'); await input.press('Control+Enter');

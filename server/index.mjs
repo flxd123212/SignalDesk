@@ -18,6 +18,11 @@ import { ExternalAccess } from './external/access.mjs';
 import { readKeilProject } from './keil.mjs';
 import { readIarProject } from './iar.mjs';
 import { discoverToolchains } from './toolchains.mjs';
+import { toolInventory } from './tool-inventory.mjs';
+import { verifiedArchive } from './tool-download.mjs';
+import { usbScanner } from './usb-inventory.mjs';
+import { displayStore } from './display-store.mjs';
+import { proposeDisplay } from './display-assistant.mjs';
 import { chipCatalog } from './catalog.mjs';
 import { PortDiscovery, identifyBootLog, inspectProject, matchBinding } from './identification.mjs';
 import { graphTest } from './testing.mjs';
@@ -36,6 +41,8 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   const app = express(), server = http.createServer(app);
   const engine = new DeviceHub({ directory, Port });
   const discovery = new PortDiscovery(engine, listPorts);
+  const scanUsb = usbScanner();
+  const displays = displayStore(path.join(directory, '..', 'displays'), engine);
   const workspace = new WorkspaceStore(path.join(directory, '..', 'devices.json'), engine); await workspace.load();
   if (!autoDemo) for (const device of engine.devices.values()) if (device.engine.config.path === 'demo') device.engine.config = { ...device.engine.config, path: 'unassigned', protocol: 'raw' };
   const automation = new TestRunner();
@@ -199,6 +206,22 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.post('/api/keil/project', async (request, response) => response.json(await readKeilProject(agent.workspace.root, request.body.path)));
   app.post('/api/iar/project', async (request, response) => response.json(await readIarProject(agent.workspace.root, request.body.path)));
   app.get('/api/toolchains', async (_request, response) => response.json(await discoverToolchains()));
+  app.get('/api/toolchains/inventory', async (_request, response) => response.json(await toolInventory()));
+  app.get('/api/toolchains/download/arduino-cli', async (_request, response) => {
+    const { name, bytes } = await verifiedArchive(); response.attachment(name).send(bytes);
+  });
+  app.get('/api/usb/boards', async (_request, response) => response.json(await scanUsb()));
+  app.get('/api/display/design', async (request, response) => response.json(await displays.load(request.query)));
+  app.post('/api/display/design', async (request, response) => response.json(await displays.save(request.body)));
+  app.post('/api/display/sketch', async (request, response) => response.json(await displays.createSketch(request.body)));
+  app.post('/api/display/proposal', async (request, response) => {
+    const { deviceId, root } = request.body;
+    if (!deviceId || engine.activeId !== deviceId || (engine.devices.get(deviceId)?.projectRoot || '') !== root) throw new Error('当前设备或工程已变化');
+    const cancel = new AbortController();
+    response.once('close', () => cancel.abort());
+    const plan = await proposeDisplay(request.body, agent.active.agent.config, cancel.signal);
+    if (!response.destroyed) response.json(plan);
+  });
   app.post('/api/chips/upload', async (request, response) => response.json(await chips.upload(request.body)));
   app.post('/api/chips/prepare', async (request, response) => response.json(await chips.prepare(request.body)));
   app.post('/api/chips/execute', async (request, response) => response.json(await chips.execute(request.body)));
@@ -254,7 +277,11 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.post('/api/ai/models', async (request, response) => { checkAgentContext(request.body); response.json(await agent.models()); });
   app.get('/api/ai/files', async (request, response) => { if (request.query.deviceId && request.query.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json(await agent.workspace.list()); });
   app.get('/api/ai/file', async (request, response) => { if (request.query.deviceId && request.query.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json(await agent.workspace.read(request.query.path)); });
-  app.post('/api/ai/run', async (request, response) => { await agent.run(request.body); response.json(agent.state()); });
+  app.post('/api/ai/run', async (request, response) => { checkAgentContext(request.body); await agent.run(request.body); response.json(agent.state()); });
+  app.post('/api/ai/resume', async (request, response) => {
+    if (!request.body.deviceId || !request.body.sessionId || !request.body.root) throw new Error('继续任务缺少设备、会话或工程上下文');
+    checkAgentContext(request.body); await agent.resume(request.body); response.json(agent.state());
+  });
   app.post('/api/ai/retry', async (_request, response) => { await agent.retry(); response.json(agent.state()); });
   app.post('/api/ai/cancel', (_request, response) => { agent.cancel(); agent.changed(); response.json(agent.state()); });
   app.post('/api/ai/clear', (_request, response) => { agent.clear(); response.json(agent.state()); });

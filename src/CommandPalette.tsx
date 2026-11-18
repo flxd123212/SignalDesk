@@ -3,8 +3,10 @@ import { ArrowRight, Cable, Search, X } from 'lucide-react';
 import { pages } from './navigation';
 import { IconButton } from './ui';
 import type { Device, Page } from './types';
+import type { LucideIcon } from 'lucide-react';
 
-export function CommandPalette({ devices, navigate, selectDevice, close }: { devices: Device[]; navigate: (page: Page) => void; selectDevice: (id: string) => Promise<void>; close: () => void }) {
+type PaletteAction = { id: string; name: string; terms: string; icon: LucideIcon; run: () => void };
+export function CommandPalette({ devices, navigate, selectDevice, close, actions = [] }: { devices: Device[]; navigate: (page: Page) => void; selectDevice: (id: string) => Promise<void>; close: () => void; actions?: PaletteAction[] }) {
   const dialog = useRef<HTMLDialogElement>(null), input = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState(''), [selected, setSelected] = useState(0), [busy, setBusy] = useState(false);
   useEffect(() => {
@@ -12,7 +14,7 @@ export function CommandPalette({ devices, navigate, selectDevice, close }: { dev
     element?.showModal(); input.current?.focus();
     return () => { element?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
   }, []);
-  const entries = [...pages.map(page => ({ id: page.id, name: page.label, group: page.group, terms: page.keywords, icon: page.icon, run: () => navigate(page.id) })), ...devices.map(device => ({ id: device.id, name: device.name, group: '切换设备', terms: `${device.path} ${device.chip || ''} ${device.board || ''}`, icon: Cable, run: () => selectDevice(device.id) }))];
+  const entries = [...actions.map(action => ({ ...action, id: `action-${action.id}`, group: '快捷操作' })), ...pages.map(page => ({ id: page.id, name: page.label, group: page.group, terms: page.keywords, icon: page.icon, run: () => navigate(page.id) })), ...devices.map(device => ({ id: device.id, name: device.name, group: '切换设备', terms: `${device.path} ${device.chip || ''} ${device.board || ''}`, icon: Cable, run: () => selectDevice(device.id) }))];
   const tokens = query.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
   const matches = entries.filter(entry => tokens.every(token => `${entry.name} ${entry.group} ${entry.terms}`.toLocaleLowerCase().includes(token)));
   const index = Math.min(selected, Math.max(0, matches.length - 1));

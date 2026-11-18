@@ -29,6 +29,12 @@ export function AppearanceSettings({ notify }: { notify: (message: string, error
       <div className="theme-preview-code"><span>void</span> setup() {'{'}<br />&nbsp; Serial.begin(<b>115200</b>);<br />{'}'}</div>
       <div className="theme-preview-bottom"><span>READY</span><b>运行</b></div>
     </div>
+    <h4>界面风格</h4>
+    <div className="finish-options" role="group" aria-label="界面风格">
+      {(['lab', 'graphite'] as const).map(finish => <button key={finish} aria-pressed={prefs.finish === finish} onClick={() => update({ finish })}>
+        <i data-finish-sample={finish} aria-hidden="true" />{finish === 'lab' ? '银灰仪器台' : '深色石墨'}{prefs.finish === finish && <Check size={14} />}
+      </button>)}
+    </div>
     <h4>主题色</h4>
     <div className="theme-presets">{accents.map((color, index) => <button key={color} title={['薄荷绿', '晴空蓝', '琥珀金', '玫瑰粉'][index]} aria-label={`主题预设 ${index + 1}`} aria-pressed={prefs.accent === color} style={{ background: color }} onClick={() => update({ accent: color })}>{prefs.accent === color && <Check size={14} />}</button>)}</div>
     <ColorControl label="自定义主题色" value={prefs.accent} change={accent => update({ accent })} />
@@ -45,6 +51,6 @@ export function AppearanceSettings({ notify }: { notify: (message: string, error
       <label className="theme-slider"><span>背景遮罩</span><input aria-label="背景遮罩" type="range" min="20" max="90" value={prefs.backgroundDim} onChange={event => update({ backgroundDim: Number(event.target.value) })} /><output>{prefs.backgroundDim}%</output></label>
     </>}
     {(error || prefs.backgroundMode === 'image' && background.error) && <p className="appearance-error" role="alert">{error || background.error}</p>}
-    <button className="quiet-button theme-reset" disabled={busy} onClick={() => update({ accent: defaults.accent, backgroundMode: 'default', backgroundColor: defaults.backgroundColor, backgroundDim: defaults.backgroundDim, backgroundBlur: defaults.backgroundBlur, backgroundFit: defaults.backgroundFit })}><RotateCcw size={14} />恢复默认主题</button>
+    <button className="quiet-button theme-reset" disabled={busy} onClick={() => update({ finish: defaults.finish, accent: defaults.accent, backgroundMode: 'default', backgroundColor: defaults.backgroundColor, backgroundDim: defaults.backgroundDim, backgroundBlur: defaults.backgroundBlur, backgroundFit: defaults.backgroundFit })}><RotateCcw size={14} />恢复默认主题</button>
   </div>;
 }

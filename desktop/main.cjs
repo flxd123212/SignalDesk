@@ -9,6 +9,7 @@ const runtimes = new Set();
 const closingRuntimes = new Set();
 const trustedWindows = new Map();
 let startServer, examplesDirectory, agentEncryption = null, windowNumber = 0, quitting = false, reopening = false;
+let windowFinish = 'lab';
 app.setName('SignalDesk');
 if (process.platform === 'win32') app.setAppUserModelId('com.signaldesk.workbench');
 if (process.env.SIGNALDESK_USER_DATA) app.setPath('userData', path.resolve(process.env.SIGNALDESK_USER_DATA));
@@ -21,7 +22,7 @@ async function openWindow(existingRuntime, panel) {
     width: panel ? 1100 : 1500, height: panel ? 800 : 980, minWidth: 720, minHeight: 540,
     show: false, backgroundColor: '#131719', title: `SignalDesk · 工作区 ${number}`,
     icon: path.join(__dirname, 'assets', process.platform === 'win32' ? 'icon.ico' : 'icon.png'),
-    ...windowChrome(),
+    ...windowChrome(process.platform, windowFinish),
     webPreferences: { preload: path.join(__dirname, 'preload.cjs'), contextIsolation: true, nodeIntegration: false, sandbox: true, devTools: true, backgroundThrottling: false },
   });
   if (process.platform !== 'darwin') window.removeMenu();
@@ -70,6 +71,12 @@ app.whenReady().then(async () => {
     return entry.window;
   };
   ipcMain.handle('desktop:fullscreen:get', event => trustedWindow(event).isFullScreen());
+  ipcMain.handle('desktop:tool-download', (event, id) => {
+    trustedWindow(event);
+    const sources = require('../shared/tool-downloads.cjs').sources();
+    if (!Object.hasOwn(sources, id)) throw new Error('Unknown tool');
+    return shell.openExternal(sources[id]);
+  });
   ipcMain.handle('desktop:new-window', async event => { trustedWindow(event); await openWindow(); });
   ipcMain.handle('desktop:close-window', event => trustedWindow(event).close());
   ipcMain.handle('desktop:native-menu', (event, kind) => {
@@ -78,6 +85,7 @@ app.whenReady().then(async () => {
     Menu.getApplicationMenu()?.getMenuItemById(kind)?.submenu?.popup({ window });
   });
   const preferencesPath = path.join(app.getPath('userData'), 'preferences.json');
+  try { windowFinish = JSON.parse(fs.readFileSync(preferencesPath, 'utf8'))?.finish || 'lab'; } catch { /* First launch. */ }
   const backgrounds = createBackgroundStore(path.join(app.getPath('userData'), 'appearance'));
   ipcMain.handle('desktop:background:save', (event, data) => { trustedWindow(event); return backgrounds.save(data); });
   ipcMain.handle('desktop:background:read', (event, id) => { trustedWindow(event); return backgrounds.read(id); });
@@ -94,11 +102,17 @@ app.whenReady().then(async () => {
     const value = JSON.stringify(preferences);
     if (value.length > 32768 || !preferences || typeof preferences !== 'object') throw new Error('Invalid preferences');
     fs.writeFileSync(preferencesPath + '.tmp', value); fs.renameSync(preferencesPath + '.tmp', preferencesPath);
-    for (const entry of trustedWindows.values()) if (entry.window.webContents.id !== event.sender.id) entry.window.webContents.send('desktop:preferences', preferences);
+    const nextFinish = preferences.finish === 'graphite' ? 'graphite' : 'lab';
+    const overlay = windowChrome(process.platform, nextFinish).titleBarOverlay;
+    for (const { window } of trustedWindows.values()) {
+      if (overlay && nextFinish !== windowFinish) window.setTitleBarOverlay(overlay);
+      if (window.webContents.id !== event.sender.id) window.webContents.send('desktop:preferences', preferences);
+    }
+    windowFinish = nextFinish;
   });
   ipcMain.handle('desktop:open-panel', async (event, panel) => {
     trustedWindow(event);
-    if (!['workspace', 'terminal', 'editor', 'agent', 'attitude', 'graph', 'can', 'commands', 'widgets', 'script', 'instruments', 'sessions', 'frames', 'automation', 'alarms', 'chips', 'overview', 'logs', 'external', 'hardware', 'circuit', 'validation'].includes(panel)) throw new Error('Unknown work page');
+    if (!['workspace', 'terminal', 'editor', 'agent', 'attitude', 'graph', 'can', 'commands', 'widgets', 'script', 'instruments', 'sessions', 'frames', 'automation', 'alarms', 'chips', 'overview', 'logs', 'external', 'hardware', 'circuit', 'validation', 'display', 'tooling'].includes(panel)) throw new Error('Unknown work page');
     const entry = trustedWindows.get(event.sender.id);
     const existing = [...trustedWindows.values()].find(item => item.runtime === entry.runtime && item.panel === panel);
     if (existing) { if (existing.window.isMinimized()) existing.window.restore(); existing.window.focus(); return; }

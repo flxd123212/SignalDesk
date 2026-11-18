@@ -97,8 +97,9 @@ for (const apiStyle of ['chat', 'responses', 'anthropic', 'gemini']) test(`${api
 
 test('context trimming keeps complete turns and reset preserves visible records and proposals', async context => {
   const agent = await fixture(context, async () => ({ content: 'done', toolCalls: [] }));
-  for (let i = 0; i < 5; i++) await agent.run({ mode: 'ai', message: `Request ${i}` });
-  assert.equal(agent.state().context.turns, 3); assert.equal(agent.state().context.droppedTurns, 2);
+  for (let i = 0; i < 10; i++) await agent.run({ mode: 'ai', message: `Request ${i}` });
+  assert.equal(agent.state().context.turns, 8); assert.equal(agent.state().context.droppedTurns, 2);
+  assert.equal(agent.state().context.memory[0].request, 'Request 0');
   assert.match(agent.modelTurns[0][0].content, /Request 2/);
   agent.actions.set('pending', { id: 'pending', createdAt: new Date().toISOString(), status: 'pending' });
   const count = agent.messages.length; agent.resetContext();

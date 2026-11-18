@@ -11,4 +11,4 @@ export type Port = { path: string; manufacturer?: string; friendlyName?: string;
 export type PortSnapshot = { ports: Port[]; initialized: boolean; revision: number; checkedAt: string | null; error: string; added?: Port[]; removed?: Port[] };
 export type Command = { id: string; name: string; text: string; format: 'text' | 'hex' | 'mixed'; ending: string; checksum: string };
 export type Session = { id: string; bytes: number; modified: string; active: boolean };
-export type Page = 'workspace' | 'terminal' | 'graph' | 'script' | 'commands' | 'instruments' | 'sessions' | 'agent' | 'frames' | 'automation' | 'chips' | 'overview' | 'logs' | 'external' | 'alarms' | 'can' | 'attitude' | 'widgets' | 'editor' | 'hardware' | 'circuit' | 'validation';
+export type Page = 'workspace' | 'terminal' | 'graph' | 'script' | 'commands' | 'instruments' | 'sessions' | 'agent' | 'frames' | 'automation' | 'chips' | 'overview' | 'logs' | 'external' | 'alarms' | 'can' | 'attitude' | 'widgets' | 'editor' | 'hardware' | 'circuit' | 'validation' | 'display' | 'tooling';

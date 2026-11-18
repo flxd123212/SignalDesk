@@ -1,6 +1,34 @@
 # 验证记录
 
-日期：2026-11-15（Asia/Shanghai）。测试产物另带运行时间戳。
+最新验证日期：2026-11-16。测试产物另带运行时间戳。
+
+## 0.1.9 Agent 预算暂停与任务恢复
+
+- 依据用户截图中的 8/8 步、1/4 项计划及 DSML 尾标记定位问题：预算停止被误标为完成，异常工具格式缺少明确提示。本轮只读研究 Bigfish 0.1.2 和 DeepSeek Harness 0.1.0-rc.6 安装副本，未读取用户凭证或修改其安装，研究范围见 [Bigfish 记录](BIGFISH_AGENT_REVIEW.md)。
+- 最终 `npm test`：175 项通过，0 失败，2 项 POSIX 用例在 Windows 跳过。新增预算暂停、手动续接、只读/日志边界、失败与中断后的工具配对、历史摘录、旧存档恢复及 DSML 拒绝用例。并行验证期间曾遇到既有硬件测试的 Windows 临时目录 `ENOTEMPTY` 清理错误，未修改该测试或硬件实现；界面测试结束后完整复测通过。
+- `npx playwright test`：67 项全部通过，约 4.6 分钟。新增真实本机模型夹具的两步预算耗尽、暂停入口、12 步手动继续、过期会话拒绝、证据续接、DSML 错误、只读工具可见性、历史摘录及窄屏检查。测试不调用用户真实 API，不执行用户工程或开发板指令。
+- `npm run build` 通过 TypeScript 和 Vite。截图 `artifacts/agent-budget-paused-desktop.png`、`agent-budget-paused-mobile.png`、`agent-dsml-recovery-mobile.png` 展示的是测试夹具。界面提供等待秒数，不宣称接入了 token 流式输出。
+- 最近八轮原生历史及有界摘录共受 128000 字符预算约束，不等于无限上下文或模型语义压缩；继续一次任务不放开实际写入、串口、工具链或烧录权限。
+- `npm run package:win` 生成 0.1.9 安装器与便携 EXE，ProductVersion 为 0.1.9.0；前端入口及四个关键后端文件与解包目录的 SHA256 一致。`npm run test:package` 通过主会话预算暂停、重启恢复继续入口、原生续接保留、外部会话仍只读，以及原有源码、教程、串口枚举、QuickJS、GLB、动态波形、独立窗口和 CLI/MCP 检查。测试明确在外部连接验证后切回内置主会话，不将外部只读恢复策略改成可执行。
+- `node tests/portable-smoke.mjs` 通过实际单文件 EXE 的自解压、隔离数据、动态波形、设置保存及退出。两份发行文件校验值已更新；本轮未覆盖用户安装、未改用户工程、未上传 GitHub。Linux/macOS 本轮没有原生验证结果。
+
+## 0.1.8 内置教程与使用体验
+
+- 新增 11 套离线教程、40 个步骤，覆盖设备连接、工程编译、波形节点、硬件联调、测试报警、Agent 与进阶工具。首次提示不阻塞工作区，可关闭；帮助菜单、F1、侧栏及功能搜索均可进入。教程只导航，不代替用户发送指令、烧录、调用模型或运行工具链。
+- `npm test`：167 项通过，0 失败，2 项 POSIX 测试在 Windows 跳过。新增教程数据、导航动作边界、进度规范化与混合报文示例的真实字节校验。实际编译用例在允许访问系统 SDK 的沙箱外通过。
+- `npx playwright test`：65 项全部通过，约 4.5 分钟。包含首次引导、跨刷新进度、F1 上下文帮助、真实设置跳转、精简模式、旧偏好导入和重置保留进度、键盘焦点、减少动画及 390px 窄屏；原有串口、波形、Agent、节点、硬件和编译测试全部通过。
+- `npm run build` 和 `npm run package:win` 通过，生成 0.1.8 安装器及便携 EXE。`npm run test:package` 通过实际 EXE 的教程打开、第三步位置重启恢复，以及大文件源码、Agent 附件、CLI/MCP、原生串口枚举、动态波形和共享窗口回归。源码快捷搜索测试等待实际文件结果后再回车，避免文件列表异步加载的竞争。
+- `node tests/portable-smoke.mjs` 通过自解压启动、隔离用户目录、动态波形、设置持久化及正常退出。发行文件 SHA256 已写入 `release/SHA256SUMS.txt` 和 `release/release-manifest.json`。
+- 截图：`artifacts/tutorials-desktop.png`、`artifacts/tutorials-mobile.png`、`artifacts/packaged-tutorial.png`。测试使用隔离数据与本机模型/设备夹具，不使用真实 API Key，不修改用户工程或现有安装；产品默认仍离线。本轮未上传 GitHub，没有 Linux/macOS 原生运行结果。
+
+## 0.1.7 大文件源码修复
+
+- 复现原因：用户的 `water_rig.ino` 为 165772 字节、3108 行，被旧的 96 KiB 上限拦截。通过修复后的读取接口完整读取并核对原始 SHA256，未修改该工程文件；未编译、烧录或执行用户固件。
+- `npm test`：164 项通过，0 失败，2 项 POSIX 测试在 Windows 跳过。新增大文件读取、8 MiB 边界、UTF-8 检查、按行截断标记、局部补丁、用户确认、CRLF、备份、过期 SHA 和 Agent 大文件附件链路测试。实际 C/C++ 编译用例在允许访问系统 SDK 的沙箱外通过。
+- `npm run build` 通过。项目工作区与 Agent 工具界面专项共 6 项通过；新增大文件高亮、搜索、2500 行以后跳转、函数大纲、Agent 审查入口与 390px 窄屏检查。测试服务器在沙箱内退出清理挂起，确认所有用例完成后仅关闭本次测试服务器，测试进程退出码为 0。
+- `npm run package:win` 生成 0.1.7 安装包和免安装版。`npm run test:package` 通过实际解包 EXE 的大文件打开与 Agent 附件、本地模型夹具、原生串口枚举、QuickJS、GLB、动态波形、独立窗口、CLI/MCP 和设置重启恢复。测试新增工作区切换后重新设置当前工作区的导航展开偏好，再核对重启恢复，未更改产品的分工作区布局逻辑。
+- `node tests/portable-smoke.mjs` 通过单文件自解压、隔离用户目录、离线启动、动态波形、设置持久化及正常退出。安装包未在本轮覆盖用户的既有安装，也未上传 GitHub；没有 Linux/macOS 本轮原生运行结果。
+- 截图：`artifacts/ide-large-source-desktop.png`、`artifacts/ide-large-source-mobile.png`、`artifacts/packaged-large-source.png`。截图中的源码、模拟设备及模型接口均为隔离测试夹具，不是用户硬件的运行证据。
 
 ## 0.1.6 本地安装更新
 

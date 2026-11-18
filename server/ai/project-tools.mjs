@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { parseDiagnostics } from '../diagnostics.mjs';
+import { readSourceLines } from './firmware.mjs';
 
 export function validateTaskPlan(steps) {
   if (!Array.isArray(steps) || !steps.length || steps.length > 8 || steps.filter(step => step?.status === 'in_progress').length > 1) throw new Error('计划需要 1 - 8 步，同时只能有一个进行中的步骤');
@@ -28,13 +29,7 @@ export async function projectTool(agent, name, args, context) {
   if (name === 'read_firmware_lines') {
     const { startLine, endLine } = args;
     if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < startLine || endLine - startLine >= 200) throw new Error('行号从 1 开始，一次最多读取 200 行');
-    const file = await workspace.read(args.path), all = file.content.split(/\r?\n/), lines = []; let characters = 0, truncated = false;
-    if (startLine > all.length) throw new Error('起始行超出文件范围');
-    for (let line = startLine; line <= Math.min(endLine, all.length); line++) {
-      const text = all[line - 1].slice(0, 1000); if (characters + text.length > 16000) { truncated = true; break; }
-      characters += text.length; lines.push({ line, text }); if (text.length < all[line - 1].length) truncated = true;
-    }
-    return { path: file.path, hash: file.hash, totalLines: all.length, lines, truncated, partial: startLine !== 1 || endLine < all.length || truncated };
+    return readSourceLines(await workspace.read(args.path), startLine, endLine);
   }
   if (name === 'get_build_diagnostics') {
     const job = agent.builder.job;
@@ -60,7 +55,7 @@ export async function projectTool(agent, name, args, context) {
     const offset = original.indexOf(oldText);
     if (offset < 0 || original.indexOf(oldText, offset + 1) !== -1) throw new Error('替换目标不存在或不唯一，请提供足够的上下文');
     const content = original.slice(0, offset) + args.newText.replace(/\r\n/g, '\n') + original.slice(offset + oldText.length);
-    const proposal = await workspace.propose({ ...args, content }); agent.changed();
+    const proposal = await workspace.propose({ ...args, content }, { partialEdit: true }); agent.changed();
     return { id: proposal.id, path: proposal.path, status: 'pending_user_action', reason: proposal.reason };
   }
 }

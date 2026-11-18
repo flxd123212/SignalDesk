@@ -14,6 +14,8 @@ import './agent-console.css';
 import './appearance.css';
 import './motion.css';
 import './workspaces.css';
+import './workbench-skin.css';
+import './instrument-finish.css';
 
 window.signaldeskBoot?.stage('interface', version);
 createRoot(document.getElementById('root')!).render(<App />);

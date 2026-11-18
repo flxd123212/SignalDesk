@@ -15,6 +15,7 @@ contextBridge.exposeInMainWorld('signaldeskDesktop', {
   onPreferences: callback => { const handler = (_event, value) => callback(value); ipcRenderer.on('desktop:preferences', handler); return () => ipcRenderer.removeListener('desktop:preferences', handler); },
   chooseDirectory: initial => ipcRenderer.invoke('desktop:choose-directory', initial),
   openBluetoothSettings: () => ipcRenderer.invoke('desktop:bluetooth-settings'),
+  openToolDownload: id => ipcRenderer.invoke('desktop:tool-download', id),
   openPanel: page => ipcRenderer.invoke('desktop:open-panel', page),
   getFullscreen: () => ipcRenderer.invoke('desktop:fullscreen:get'),
   toggleFullscreen: () => ipcRenderer.invoke('desktop:fullscreen:toggle'),

@@ -143,6 +143,9 @@ export async function callModel({ config, messages, tools = [], responseInput, s
     reasoningOnly = !result.content.trim() && !result.toolCalls.length && !!message?.reasoning_content;
   }
   const truncated = ['length', 'max_tokens', 'max_output_tokens', 'MAX_TOKENS'].includes(reason);
+  if (/<\/?[|｜]DSML[|｜][^>]{0,200}>/i.test(result.content.replace(/```[\s\S]*?```/g, ''))) {
+    throw new Error('AI 把 DSML 工具标记放进了正文，没有返回有效的标准工具调用。本轮已停止，未执行这些标记；可继续任务重试，反复出现时请检查服务商的工具调用兼容性');
+  }
   const reasoningField = style === 'chat' ? 'reasoning_content' : style === 'anthropic' ? 'thinking' : 'reasoning';
   if (reasoningOnly && truncated) throw new Error(`AI 推理达到输出上限（${maxTokens} tokens），仅返回 ${reasoningField}，尚未生成正文。${deepseek ? '在 AI 接口设置中选择“快速回答”，或提高输出上限并延长超时后重试' : '请提高输出上限后重试'}；本次未执行不完整的工具调用`);
   if (!result.content.trim() && !result.toolCalls.length) throw new Error(`AI 未返回可用正文或工具调用（${style}，结束原因：${reason || '未知'}${reasoningOnly ? ` / 仅返回 ${reasoningField}` : ''}）。检查模型 ID、API 格式；推理模型可增加输出上限`);

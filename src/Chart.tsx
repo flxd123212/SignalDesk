@@ -6,7 +6,7 @@ import 'uplot/dist/uPlot.min.css';
 import { defaultChannelScale, type ScopeSettings } from './scope';
 import { nearestSample, spectrumData, timeLabel } from './scope-math.mjs';
 
-type Props = { names: string[]; visible: boolean[]; span: number; paused: boolean; spectrum?: boolean; sampleRate: number; channel: number; capture?: Sample[] | null; zoomReset?: number; scope?: ScopeSettings; onCursorPosition?: (position: number) => void };
+type Props = { names: string[]; visible: boolean[]; span: number; paused: boolean; status?: string; spectrum?: boolean; sampleRate: number; channel: number; capture?: Sample[] | null; zoomReset?: number; scope?: ScopeSettings; onCursorPosition?: (position: number) => void };
 
 export function Chart(props: Props) {
   const element = useRef<HTMLDivElement>(null);
@@ -30,7 +30,9 @@ export function Chart(props: Props) {
       legend: { show: false },
       scales: { x: { time: false }, y: { auto: false } },
       axes: [
-        { stroke: '#747b84', grid: { stroke: '#292d32', width: 1 }, ticks: { stroke: '#292d32', size: 5 }, font: '10px Consolas, monospace', size: 34, splits: (_plot, _axis, min, max) => Array.from({ length: 11 }, (_, index) => min + (max - min) * index / 10), values: (_plot, ticks) => ticks.map(value => spectrum ? `${+value.toPrecision(4)}` : timeLabel(value - timeOffset)) },
+        { stroke: '#9aa8a9', grid: { stroke: '#2b3436', width: 1 }, ticks: { stroke: '#343c3e', size: 5 }, font: '10px Consolas, monospace', size: 34,
+          splits: (_plot, _axis, min, max) => Array.from({ length: 11 }, (_, index) => min + (max - min) * index / 10),
+          values: (plot, ticks) => ticks.map((value, i) => plot.width < 560 && i % 2 ? '' : spectrum ? `${+value.toPrecision(4)}` : timeLabel(value - timeOffset)) },
         { stroke: '#747b84', grid: { stroke: '#292d32', width: 1 }, ticks: { show: false }, font: '10px Consolas, monospace', size: 53, gap: 8, splits: (_plot, _axis, min, max) => Array.from({ length: 9 }, (_, index) => min + (max - min) * index / 8), values: (_plot, ticks) => ticks.map(value => { const scale = config.current.scope?.channels[config.current.channel] || defaultChannelScale; const physical = !spectrum && config.current.scope?.manual ? value * scale.division + scale.offset : value; return +physical.toPrecision(4) + ''; }) },
       ],
       cursor: { drag: { x: !props.scope?.cursors, y: false, setScale: false }, points: { size: 5 } },
@@ -127,5 +129,5 @@ export function Chart(props: Props) {
     render();
     return () => { clearInterval(update); unsubscribe(); observer.disconnect(); cancelAnimationFrame(frame); plot.over.removeEventListener('click', cursorClick); plot.destroy(); };
   }, [signature, props.spectrum, props.channel, props.scope?.cursors]);
-  return <div className={`chart-wrap ${props.scope?.cursors ? 'has-cursors' : ''}`}><div className="plot-host" ref={element} /><div className="chart-readout">{measurement || cursor || (props.spectrum ? 'HANN · 去直流 · 单边幅值谱' : `TIME / s    ${props.paused ? 'HOLD' : 'LIVE'}`)}</div></div>;
+  return <div className={`chart-wrap ${props.scope?.cursors ? 'has-cursors' : ''}`}><div className="plot-host" ref={element} /><div className="chart-readout">{measurement || cursor || (props.spectrum ? 'HANN · 去直流 · 单边幅值谱' : `TIME / s    ${props.status || (props.paused ? 'HOLD' : 'LIVE')}`)}</div></div>;
 }

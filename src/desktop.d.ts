@@ -19,6 +19,7 @@ interface Window {
     onPreferences(callback: (value: unknown) => void): () => void;
     chooseDirectory(initial: string): Promise<string | null>;
     openBluetoothSettings(): Promise<void>;
+    openToolDownload(id: string): Promise<void>;
     openPanel(page: string): Promise<void>;
     getFullscreen(): Promise<boolean>;
     toggleFullscreen(): Promise<void>;

@@ -8,9 +8,9 @@ type Target = { id: string; name: string; label: string; kind: string; root: str
 type Plan = { id: string; targets: Target[]; recommendedTarget: string; warnings: string[]; scannedFiles: number; ai: { configured: boolean; model: string; apiStyle: string } };
 export type SetupResult = { deviceId: string; connected: boolean; reused?: boolean; protocol: string; warnings: string[] };
 
-export function ProjectSetupDialog({ close, completed }: { close: () => void; completed: (result: SetupResult) => void }) {
+export function ProjectSetupDialog({ close, completed, initialRoot = '' }: { close: () => void; completed: (result: SetupResult) => void; initialRoot?: string }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  const [root, setRoot] = useState(''), [plan, setPlan] = useState<Plan | null>(null), [targetId, setTargetId] = useState('');
+  const [root, setRoot] = useState(initialRoot), [plan, setPlan] = useState<Plan | null>(null), [targetId, setTargetId] = useState('');
   const [port, setPort] = useState(''), [name, setName] = useState(''), [connect, setConnect] = useState(true), [reuseAI, setReuseAI] = useState(true), [newDevice, setNewDevice] = useState(false);
   const [serial, setSerial] = useState({ baudRate: 115200, sampleRate: 200, protocol: 'raw' }), [fqbn, setFqbn] = useState(''), [busy, setBusy] = useState(false), [error, setError] = useState('');
   const target = plan?.targets.find(item => item.id === targetId), candidate = target?.ports.find(item => item.path === port), reuse = !!target?.existingDeviceId && !newDevice;

@@ -149,6 +149,42 @@ test('IDE source navigation highlights C++, folds functions and opens files by k
   await page.keyboard.press('Escape');
 });
 
+test('large Arduino source opens fully, highlights, searches and jumps without the old 96 KiB error', async ({ page, project }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  const source = '#include <Arduino.h>\n' + Array.from({ length: 2500 }, (_, index) => `// Calibration ${index}: preserve sensor configuration and existing application behavior.\n`).join('')
+    + 'void checkSensor() {\n  const float threshold = 42.5f;\n  Serial.println("sensor-ready");\n}\n';
+  expect(Buffer.byteLength(source)).toBeGreaterThan(96 * 1024);
+  await fs.writeFile(path.join(project.root, 'water_rig.ino'), source);
+  const plan = await project.call('/projects/prepare', { root: project.root });
+  await project.call('/projects/apply', { id: plan.id, targetId: plan.targets[0].id, reuseAI: false });
+  await page.goto(project.url); await expect(page.locator('.app-shell')).toHaveAttribute('data-ready', 'true');
+  await expect(page.locator('#signaldesk-startup')).not.toBeVisible();
+  await page.keyboard.press('Control+p');
+  await page.getByRole('combobox', { name: '搜索项目文件' }).fill('water_rig.ino:2502');
+  await page.getByRole('combobox', { name: '搜索项目文件' }).press('Enter');
+  await expect(page.locator('.source-workspace .inline-error')).toHaveCount(0);
+  await expect(page.getByLabel('跳转源码行')).toHaveValue('2502');
+  await expect(page.locator('.cm-activeLine')).toContainText('void checkSensor');
+  await expect(page.locator('.source-footer')).toContainText('2506 行');
+  await expect(page.locator('.explorer-outline')).toContainText('checkSensor');
+  await expect.poll(() => page.locator('.source-workspace .cm-line span').evaluateAll(elements => new Set(elements.map(element => getComputedStyle(element).color)).size)).toBeGreaterThanOrEqual(4);
+  await page.getByLabel('搜索源码').fill('sensor-ready'); await page.getByLabel('搜索源码').press('Enter');
+  await expect(page.getByLabel('跳转源码行')).toHaveValue('2504');
+  await expect(page.locator('.cm-activeLine')).toContainText('sensor-ready');
+  await page.screenshot({ path: 'artifacts/ide-large-source-desktop.png', fullPage: true });
+  await page.getByRole('button', { name: '交给 Agent 审查', exact: true }).click();
+  const agent = page.getByRole('complementary', { name: '属性与 Agent 面板' });
+  await expect(agent.getByLabel('Agent 分析请求')).toContainText('water_rig.ino');
+  await expect(agent.getByLabel('附带当前文件')).toBeChecked();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole('button', { name: '关闭 Agent 面板', exact: true }).click();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1)).toBe(true);
+  await expect(page.locator('.cm-content')).toContainText('sensor-ready');
+  await page.screenshot({ path: 'artifacts/ide-large-source-mobile.png', fullPage: true });
+  expect(await fs.readFile(path.join(project.root, 'water_rig.ino'), 'utf8')).toBe(source);
+  expect(errors).toEqual([]);
+});
+
 test('simple mode preserves full layout, exposes instruments on demand and fits mobile', async ({ page, project }) => {
   await project.call('/connect', { path: 'demo' });
   await page.goto(project.url); await expect(page.locator('.app-shell')).toHaveAttribute('data-ready', 'true'); await expect(page.locator('#signaldesk-startup')).not.toBeVisible();

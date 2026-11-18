@@ -31,6 +31,10 @@ try {
   await call('/connect', { path: 'demo' });
   const ai = await call('/ai/state');
   assert.equal(ai.config.root, path.join(directory, 'examples', 'SignalGenerator'));
+  const largeSource = '#include <Arduino.h>\n' + '// Sensor calibration data retained.\n'.repeat(5000) + 'void verifyLargeSource() { Serial.println("large-source-ready"); }\n';
+  await fs.writeFile(path.join(ai.config.root, 'LargeSource.ino'), largeSource);
+  const largeFile = await call(`/ai/file?deviceId=${startup.activeDevice}&path=LargeSource.ino`);
+  assert.equal(largeFile.content, largeSource); assert.ok(largeFile.bytes > 96 * 1024);
   await fs.access(path.join(directory, 'examples', 'CrossCompileCheck', 'CMakeLists.txt'));
   assert.ok(Array.isArray(await call('/ports')));
   const widget = await call('/widgets/evaluate', { inputs: [21], code: '{ render(ctx) { return { kind: "number", value: ctx.inputs[0] * 2 }; } }' });
@@ -63,6 +67,7 @@ try {
   const transport = new StdioClientTransport({ command: external.command, args: [external.bridge], env: clientEnvironment, cwd: directory, stderr: 'pipe' });
   try { await client.connect(transport); assert.ok((await client.listTools()).tools.some(tool => tool.name === 'get_device_snapshot')); }
   finally { await client.close(); }
+  await call('/ai/sessions/select', { id: ai.sessionId });
   await window.getByRole('button', { name: '工具', exact: true }).click(); await window.getByRole('menuitem', { name: 'AI 与 Agent', exact: true }).click();
   await window.locator('.agent-console').waitFor();
   const prompt = window.getByLabel('Agent 分析请求'); await prompt.fill('/');
@@ -72,23 +77,49 @@ try {
   await window.getByRole('button', { name: '分析数据', exact: true }).click();
   await window.waitForFunction(() => document.querySelector('[aria-label="Agent 运行状态"]')?.textContent?.includes('本地检查完成'));
   assert.equal((await call('/ai/state')).progress.phase, 'complete');
+  let budgetMode = false, budgetCalls = 0;
   const modelServer = http.createServer((request, response) => {
-    request.resume(); request.on('end', () => { response.setHeader('Content-Type', 'application/json'); response.setHeader('x-request-id', 'package-trace'); response.end(JSON.stringify({ model: 'package-resolved', id: 'package-response', choices: [{ message: { content: '调用来源测试完成。此回复来自本机测试接口。' }, finish_reason: 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 6 } })); });
+    request.resume(); request.on('end', () => {
+      response.setHeader('Content-Type', 'application/json'); response.setHeader('x-request-id', 'package-trace');
+      const message = budgetMode && ++budgetCalls === 1 ? { tool_calls: [{ id: 'package-overview', type: 'function', function: { name: 'get_project_overview', arguments: '{}' } }] } : { content: '调用来源测试完成。此回复来自本机测试接口。' };
+      response.end(JSON.stringify({ model: 'package-resolved', id: 'package-response', choices: [{ message, finish_reason: message.tool_calls ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 6 } }));
+    });
   });
   await new Promise(resolve => modelServer.listen(0, '127.0.0.1', resolve));
   try {
     await call('/ai/config', { baseUrl: `http://127.0.0.1:${modelServer.address().port}/v1`, model: 'package-requested', apiStyle: 'chat', apiKey: 'package-fixture-key' });
-    const result = await call('/ai/run', { mode: 'ai', message: 'Verify call metadata' });
+    const result = await call('/ai/run', { mode: 'ai', message: 'Verify call metadata', selectedFile: 'LargeSource.ino' });
     assert.equal(result.messages.at(-1).provenance.reportedModel, 'package-resolved'); assert.equal(result.context.turns, 1);
     assert.ok(!JSON.stringify(result).includes('package-fixture-key'));
     const details = window.locator('.agent-call-details').last(); await details.locator('summary').click(); await details.locator('p').scrollIntoViewIfNeeded();
     assert.match(await details.innerText(), /package-trace/);
     await window.screenshot({ path: path.resolve('artifacts/packaged-agent-call-record.png') });
     const reset = await call('/ai/context/reset', { sessionId: result.sessionId }); assert.equal(reset.context.turns, 0); assert.ok(reset.messages.some(message => message.provenance?.reportedModel === 'package-resolved'));
-    await call('/ai/config', { ...ai.config, clearKey: true });
+    budgetMode = true;
+    const paused = await call('/ai/run', { mode: 'ai', message: 'Package budget fixture', maxSteps: 2, agentMode: 'review' });
+    assert.equal(paused.progress.phase, 'paused'); assert.equal(paused.canResume, true); assert.equal(budgetCalls, 2);
+    await window.getByRole('button', { name: '继续任务', exact: true }).waitFor();
+    await window.screenshot({ path: path.resolve('artifacts/packaged-agent-paused.png') });
   } finally { modelServer.closeAllConnections(); await new Promise(resolve => modelServer.close(resolve)); }
   await window.screenshot({ path: path.resolve('artifacts/packaged-agent-console.png') });
+  await window.keyboard.press('Control+p');
+  await window.getByRole('combobox', { name: '搜索项目文件' }).fill('LargeSource.ino:5002');
+  await window.getByRole('option', { name: /LargeSource\.ino/ }).waitFor();
+  await window.getByRole('combobox', { name: '搜索项目文件' }).press('Enter');
+  try { await window.locator('.cm-activeLine', { hasText: 'verifyLargeSource' }).waitFor(); }
+  catch (error) { await window.screenshot({ path: path.resolve('artifacts/packaged-source-jump-failure.png') }); console.error(await window.locator('.source-workspace').innerText()); throw error; }
+  assert.equal(await window.locator('.source-workspace .inline-error').count(), 0);
+  await window.screenshot({ path: path.resolve('artifacts/packaged-large-source.png') });
+  await window.keyboard.press('F1');
+  const tutorial = window.getByRole('dialog', { name: '帮助与教程', exact: true });
+  await tutorial.getByRole('heading', { name: '导入工程与编译', exact: true }).waitFor();
+  await tutorial.getByRole('button', { name: '第 3 步：核对编译配置', exact: true }).click();
+  await window.screenshot({ path: path.resolve('artifacts/packaged-tutorial.png') });
+  await tutorial.getByRole('button', { name: '关闭教程', exact: true }).click();
   await window.getByRole('button', { name: '工具', exact: true }).click(); await window.getByRole('menuitem', { name: '实时监测', exact: true }).click();
+  await window.getByRole('button', { name: '打开设置', exact: true }).click();
+  await window.getByRole('checkbox', { name: '展开导航文字', exact: true }).check();
+  await window.getByRole('button', { name: '关闭设置', exact: true }).click();
   await window.screenshot({ path: path.resolve('artifacts/packaged-desktop.png') });
   await fs.appendFile(path.join(ai.config.root, 'SignalGenerator.ino'), '\n// User modification retained during restart.\n');
   const savedPreferences = JSON.parse(await fs.readFile(path.join(directory, 'preferences.json'), 'utf8'));
@@ -106,7 +137,20 @@ try {
   assert.equal(await restarted.locator('.app-shell').evaluate(element => element.classList.contains('nav-expanded')), true);
   assert.equal(await restarted.locator('.app-shell').evaluate(element => element.style.getPropertyValue('--accent')), '#eea6bf');
   assert.match(await fs.readFile(path.join(ai.config.root, 'SignalGenerator.ino'), 'utf8'), /User modification retained/);
-  console.log('Packaged EXE passed: clean cwd, writable examples, native serial enumeration, QuickJS worker/WASM, GLB asset, live waveform, shared detached window, CLI, MCP, restart preferences and preserved user edits.');
+  await restarted.getByRole('button', { name: '帮助', exact: true }).click();
+  await restarted.getByRole('menuitem', { name: '使用教程…', exact: true }).click();
+  const restoredTutorial = restarted.getByRole('dialog', { name: '帮助与教程', exact: true });
+  await restoredTutorial.getByRole('heading', { name: '导入工程与编译', exact: true }).waitFor();
+  assert.equal(await restoredTutorial.getByRole('button', { name: '第 3 步：核对编译配置', exact: true }).getAttribute('aria-current'), 'step');
+  assert.equal(JSON.parse(await fs.readFile(path.join(directory, 'preferences.json'), 'utf8')).tutorial.dismissed, true);
+  await restoredTutorial.getByRole('button', { name: '关闭教程', exact: true }).click();
+  await restarted.getByRole('button', { name: '工具', exact: true }).click(); await restarted.getByRole('menuitem', { name: 'AI 与 Agent', exact: true }).click();
+  const resumed = await restarted.evaluate(async () => (await fetch('/api/ai/state')).json());
+  assert.equal(resumed.busy, false); assert.equal(resumed.canResume, true); assert.equal(resumed.progress.phase, 'paused');
+  assert.equal(resumed.sessionId, ai.sessionId); assert.equal(resumed.sessions.find(session => session.name === 'Package smoke').readOnly, true);
+  await restarted.getByRole('button', { name: '继续任务', exact: true }).waitFor();
+  assert.ok(resumed.context.turns > 0); assert.equal(resumed.config.hasApiKey, true);
+  console.log('Packaged EXE passed: clean cwd, writable examples, large-source browsing, Agent attachment and paused-task restart, tutorials, native serial enumeration, QuickJS worker/WASM, GLB asset, live waveform, shared detached window, CLI, MCP, restart preferences and preserved user edits.');
 } finally {
   await desktop?.close();
   await fs.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 200 });

@@ -52,7 +52,7 @@ test('serial packet access requires log opt-in and plan updates enforce bounded 
   await agent.tool('update_task_plan', { steps }, { readOnly: true }); assert.deepEqual(agent.state().taskPlan, steps);
   await assert.rejects(agent.tool('update_task_plan', { steps: steps.map(step => ({ ...step, status: 'in_progress' })) }, {}), /只能有一个/);
   agent.clear(); assert.deepEqual(agent.state().taskPlan, []);
-  assert.equal(AGENT_TOOLS.length, 18); assert.equal(READ_ONLY_TOOLS.has('propose_source_patch'), false);
+  assert.equal(AGENT_TOOLS.length, 19); assert.ok(READ_ONLY_TOOLS.has('inspect_development_environment')); assert.equal(READ_ONLY_TOOLS.has('propose_source_patch'), false);
 });
 
 test('tool activity exposes bounded results, file links and elapsed time without credentials', async t => {

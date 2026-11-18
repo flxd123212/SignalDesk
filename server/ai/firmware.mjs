@@ -1,7 +1,21 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
-import { createTwoFilesPatch, structuredPatch } from 'diff';
+import { formatPatch, structuredPatch } from 'diff';
+
+export const MAX_SOURCE_BYTES = 8 * 1024 * 1024;
+const MAX_REPLACEMENT_BYTES = 96 * 1024;
+
+export function readSourceLines(file, startLine, endLine) {
+  if (!Number.isInteger(startLine) || !Number.isInteger(endLine) || startLine < 1 || endLine < startLine || endLine - startLine >= 200) throw new Error('行号从 1 开始，一次最多读取 200 行');
+  const all = file.content.split(/\r?\n/), lines = []; let characters = 0, truncated = false;
+  if (startLine > all.length) throw new Error('起始行超出文件范围');
+  for (let line = startLine; line <= Math.min(endLine, all.length); line++) {
+    const text = all[line - 1].slice(0, 1000); if (characters + text.length > 16000) { truncated = true; break; }
+    characters += text.length; lines.push({ line, text }); if (text.length < all[line - 1].length) truncated = true;
+  }
+  return { path: file.path, hash: file.hash, totalLines: all.length, lines, truncated, partial: startLine !== 1 || endLine < all.length || truncated };
+}
 
 const allowed = new Set(['.c', '.h', '.cpp', '.hpp', '.cc', '.cxx', '.hxx', '.cmake', '.ino', '.rs', '.py', '.pyi', '.go', '.lua', '.java', '.cs', '.js', '.jsx', '.mjs', '.cjs', '.ts', '.tsx', '.sh', '.bash', '.ps1', '.asm', '.v', '.sv', '.vh', '.svh', '.md', '.html', '.css', '.xml', '.ini', '.toml', '.txt', '.json', '.yaml', '.yml', '.ioc', '.uvprojx', '.uvproj', '.uvoptx', '.uvopt', '.sct', '.s', '.ld', '.ewp', '.eww', '.ewd', '.icf']);
 const excluded = new Set(['node_modules', '.git', '.pio', 'build', 'target', '.signaldesk-backups', '.references', '.venv']);
@@ -68,24 +82,43 @@ export class FirmwareWorkspace {
 
   async read(relative) {
     const filename = await this.resolve(relative);
-    if ((await fs.stat(filename)).size > 96 * 1024) throw new Error('代码分析暂支持 96 KiB 以内的单文件');
-    const bytes = await fs.readFile(filename);
+    const handle = await fs.open(filename, 'r'), chunks = []; let length = 0;
+    try {
+      if ((await handle.stat()).size > MAX_SOURCE_BYTES) throw new Error('源码浏览暂支持 8 MiB 以内的单文件');
+      // Bound the actual read as well as stat: a source file can grow during a build.
+      while (true) {
+        const chunk = Buffer.allocUnsafe(Math.min(64 * 1024, MAX_SOURCE_BYTES + 1 - length));
+        const { bytesRead } = await handle.read(chunk, 0, chunk.length, null);
+        if (!bytesRead) break;
+        length += bytesRead;
+        if (length > MAX_SOURCE_BYTES) throw new Error('源码浏览暂支持 8 MiB 以内的单文件');
+        chunks.push(chunk.subarray(0, bytesRead));
+      }
+    } finally { await handle.close(); }
+    const bytes = Buffer.concat(chunks, length);
     let content;
     try { content = new TextDecoder('utf-8', { fatal: true }).decode(bytes); }
     catch { throw new Error('固件文件必须使用 UTF-8 编码'); }
     return { path: relative, content, hash: hash(bytes), bytes: bytes.length };
   }
 
-  async propose({ path: relative, expectedHash, content, reason }) {
+  async propose({ path: relative, expectedHash, content, reason }, { partialEdit = false } = {}) {
     if (this.proposals.size >= 40) throw new Error('修改提案数量已达上限，请开启新会话');
-    if (typeof content !== 'string' || Buffer.byteLength(content) > 96 * 1024 || typeof reason !== 'string') throw new Error('修改提案格式无效或文件过大');
+    const limit = partialEdit ? MAX_SOURCE_BYTES : MAX_REPLACEMENT_BYTES;
+    if (typeof content !== 'string' || Buffer.byteLength(content) > limit || typeof reason !== 'string') throw new Error(partialEdit ? '局部补丁结果不能超过 8 MiB' : '整文件替换最多 96 KiB，大文件请使用 propose_source_patch');
     const before = await this.read(relative);
     if (expectedHash !== before.hash) throw new Error('文件已经变化，请重新读取后生成提案');
+    if (!partialEdit && before.bytes > MAX_REPLACEMENT_BYTES) throw new Error('大文件不能整文件替换，请使用 propose_source_patch 保留无关代码');
     const normalized = before.content.includes('\r\n') ? content.replace(/\r?\n/g, '\r\n') : content.replace(/\r\n/g, '\n');
+    if (Buffer.byteLength(normalized) > limit) throw new Error('换行规范化后的文件超过修改大小限制');
     if (normalized === before.content) throw new Error('提案未包含任何修改');
-    const proposal = { id: randomUUID(), type: 'file', status: 'pending', root: this.root, path: relative, expectedHash, content: normalized, reason: reason.slice(0, 2000), diff: createTwoFilesPatch(`a/${relative}`, `b/${relative}`, before.content, normalized), createdAt: new Date().toISOString() };
+    const patch = structuredPatch(`a/${relative}`, `b/${relative}`, before.content, normalized, '', '', { context: 3, timeout: 1000 });
+    if (!patch) throw new Error('修改差异计算超时，请缩小单次修改范围');
+    const diff = formatPatch(patch);
+    if (Buffer.byteLength(diff) > 256 * 1024) throw new Error('修改差异过大，请缩小单次修改范围');
+    const proposal = { id: randomUUID(), type: 'file', status: 'pending', root: this.root, path: relative, expectedHash, content: normalized, reason: reason.slice(0, 2000), diff, createdAt: new Date().toISOString() };
     proposal.beforeContent = before.content; proposal.afterHash = hash(normalized);
-    proposal.hunks = structuredPatch(relative, relative, before.content, normalized, '', '', { context: 3 }).hunks;
+    proposal.hunks = patch.hunks;
     await this.persist(proposal);
     this.proposals.set(proposal.id, proposal); return proposal;
   }

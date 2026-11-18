@@ -1,8 +1,9 @@
 const path = require('node:path');
 
-function windowChrome(platform = process.platform) {
+function windowChrome(platform = process.platform, finish = 'lab') {
   if (platform === 'darwin') return { titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 13 } };
-  return { titleBarStyle: 'hidden', titleBarOverlay: { color: '#202429', symbolColor: '#cbd3dc', height: 40 } };
+  const palette = finish === 'graphite' ? { color: '#181c1d', symbolColor: '#cbd3dc' } : { color: '#fbfcfa', symbolColor: '#374d50' };
+  return { titleBarStyle: 'hidden', titleBarOverlay: { ...palette, height: 40 } };
 }
 
 function electronExecutable(root, platform = process.platform) {

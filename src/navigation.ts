@@ -2,6 +2,8 @@ import { Activity, Bell, Bot, Box, Cable, Code2, Cpu, CircuitBoard, Hammer, Flas
 
 export const navigationGroups = ['软件', '硬件', '联调', '测试'];
 export const pages = [
+  { id: 'display', label: '屏幕设计器', icon: PanelsTopLeft, group: '硬件', keywords: 'HMI OLED SSD1306 SH1106 TFT 触摸 屏幕 界面 GIF ST7789 ILI9341' },
+  { id: 'tooling', label: '工具链中心', icon: Hammer, group: '软件', keywords: '安装 检测 下载 编译器 工具链 环境 Arduino GCC ESP-IDF' },
   { id: 'hardware', label: '硬件工程', icon: CircuitBoard, group: '硬件', keywords: 'kicad netlist 原理图 PCB 网表 引脚 GPIO 软件硬件' },
   { id: 'circuit', label: '实时电路图', icon: CircuitBoard, group: '联调', keywords: 'sensor pins 传感器 接线 硬件 实时' },
   { id: 'validation', label: '构建与测试', icon: Hammer, group: '测试', keywords: 'build test 编译 验证 gcc cmake' },

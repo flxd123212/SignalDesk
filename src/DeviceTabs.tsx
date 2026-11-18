@@ -14,7 +14,7 @@ export function DeviceTabs({ state, notify }: { state: AppState; notify: (messag
       const next = event.key === 'Home' ? 0 : event.key === 'End' ? all.length - 1 : (index + (event.key === 'ArrowRight' ? 1 : -1) + all.length) % all.length;
       const tab = event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]')[next];
       void act('/devices/select', { id: all[next].id }).then(() => tab?.focus());
-    }}><span className={`status-dot ${device.connected ? 'live' : ''}`} /><span className="device-tab-name">{device.name}</span><small>{device.path === 'demo' ? 'DEMO' : device.path}</small>{device.chip && <small className="device-tab-chip">{device.chip}</small>}{device.recording && <span className="status-dot recording" />}</button>
+    }}><span className={`status-dot ${device.connected ? 'live' : ''}`} /><span className="device-tab-name">{device.name}</span><small>{device.path === 'demo' ? 'DEMO' : device.path === 'unassigned' ? '未分配' : device.path}</small>{device.chip && <small className="device-tab-chip">{device.chip}</small>}{device.recording && <span className="status-dot recording" />}</button>
     <IconButton title={`关闭 ${device.name}`} disabled={busy || all.length < 2} onClick={() => act('/devices/remove', { id: device.id })}><X size={12} /></IconButton>
   </div>)}<IconButton title="添加设备" disabled={busy || (state.devices?.length || 0) >= 8} onClick={() => act('/devices/add', {})}><Plus size={16} /></IconButton></div>;
 }

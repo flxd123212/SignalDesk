@@ -1,0 +1,141 @@
+.finish-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.finish-options button { min-height: 38px; padding: 5px 11px; border: 1px solid #434e51; font-size: 13px; }
+.finish-options button[aria-pressed=true] { border-color: var(--accent); color: var(--accent-label); }
+.finish-options i { width: 24px; height: 17px; border: 1px solid #a6b6b8; border-left: 7px solid #e7eded; background: #17272a; border-radius: 2px; }
+.finish-options i[data-finish-sample=graphite] { border-color: #555f62; border-left-color: #495254; }
+
+/* The control deck can wrap independently of the viewport when an inspector opens. */
+.scope-control-deck { display: flex; flex: none; flex-wrap: wrap; align-items: stretch; border-bottom: 1px solid #344244; }
+.four-workspaces .scope-control-deck :is(.scope-toolbar, .trigger-bar) { border: 0; }
+.scope-control-deck .scope-toolbar { flex: 1 1 auto; }
+.scope-control-deck .trigger-bar { flex: 0 1 auto; margin-left: auto; }
+.trigger-bar[data-trigger=off] > :is(select:not(:first-child),input,button:disabled,span:empty) { display: none; }
+
+.four-workspaces[data-finish=lab] {
+  --paper: #f4f6f5;
+  --alloy: #e6ebea;
+  --hairline: #cbd3d1;
+  --print: #1b2a2c;
+  --secondary-print: #455a5d;
+  --accent-on-paper: color-mix(in srgb, var(--accent) 32%, #112a29);
+  --panel-selection: color-mix(in srgb, var(--accent) 27%, #e4eae7);
+}
+.four-workspaces[data-finish=lab] .app-header { background: #fbfcfa; border-bottom-color: var(--hairline); color: var(--print); }
+.four-workspaces[data-finish=lab] .brand > svg { color: var(--accent-label); background: #172e30; border-radius: 5px; width: 31px; height: 31px; padding: 5px; }
+.four-workspaces[data-finish=lab] .brand > span:not(.edition), .four-workspaces[data-finish=lab] .brand > span > span { color: var(--print); }
+.four-workspaces[data-finish=lab] .brand > span > span { font-weight: 500; }
+.four-workspaces[data-finish=lab] .app-header :is(.menu-trigger, .header-breadcrumb, .header-breadcrumb > span, .icon-button) { color: var(--secondary-print); }
+.four-workspaces[data-finish=lab] .app-header .header-chip { color: var(--secondary-print) !important; }
+.four-workspaces[data-finish=lab] .app-header :is(.menu-trigger, .icon-button):is(:hover, [aria-expanded=true]) { color: var(--print); background: #dce5e2; }
+.four-workspaces[data-finish=lab] .app-header .global-search { color: var(--secondary-print); border-color: var(--hairline); background: var(--paper); }
+.four-workspaces[data-finish=lab] .add-project-button { background: #203b3c; color: #f2faf6; border-color: #203b3c; }
+.four-workspaces[data-finish=lab] .add-project-button:hover { background: #315756; }
+.four-workspaces[data-finish=lab] .workspace-strip { background: var(--paper); border-color: var(--hairline); }
+.four-workspaces[data-finish=lab] .workspace-switcher { align-items: center; gap: 5px; }
+.four-workspaces[data-finish=lab] .workspace-switcher button { align-self: center; height: 33px; color: #516466; border-radius: 5px; }
+.four-workspaces[data-finish=lab] .workspace-switcher button:hover { background: #dce4e1; }
+.four-workspaces[data-finish=lab] .workspace-switcher button[aria-pressed=true] { background: #253536; color: #f7faf8; }
+.four-workspaces[data-finish=lab] .workspace-switcher button[aria-pressed=true] svg { color: color-mix(in srgb, var(--area) 75%, white); }
+.four-workspaces[data-finish=lab] .workspace-switcher button[aria-pressed=true]::after { display: none; }
+.four-workspaces[data-finish=lab] .strip-tools { border-color: var(--hairline); }
+.four-workspaces[data-finish=lab] .workspace-strip :is(.strip-tools button,.learning-bar button,.learning-bar strong) { color: var(--secondary-print); }
+.four-workspaces[data-finish=lab] .strip-tools button[aria-pressed=true], .four-workspaces[data-finish=lab] .workspace-strip button.icon-button:hover { color: var(--print); background: #dbe4e1; }
+.four-workspaces[data-finish=lab] .workspace-strip .learning-bar .quiet-button { color: var(--accent-on-paper); }
+
+/* Keep the explorer and session selectors on the case, the instruments on glass. */
+.four-workspaces[data-finish=lab] .ide-sidebar { background: var(--alloy); color: var(--print); }
+.four-workspaces[data-finish=lab] .ide-sidebar .side-tabs { background: #dce4e1; border-color: var(--hairline); }
+.four-workspaces[data-finish=lab] .side-tabs button { color: var(--secondary-print); }
+.four-workspaces[data-finish=lab] .side-tabs button.active { color: var(--print); border-color: var(--accent-on-paper); }
+.four-workspaces[data-finish=lab] .ide-sidebar .connection-sidebar { background: #1d2527; color: var(--text); }
+.four-workspaces[data-finish=lab] :is(.workspace-functions, .explorer-device-list, .explorer-opened, .explorer-outline, .explorer-hardware, .explorer-target) { border-color: var(--hairline); }
+.four-workspaces[data-finish=lab] :is(.workspace-functions > summary, .project-explorer summary, .explorer-heading, .explorer-root, .explorer-device-list small) { color: #374f51; }
+.four-workspaces[data-finish=lab] .workspace-functions button:not([role=menuitem]), .four-workspaces[data-finish=lab] .project-explorer button { color: #364b4d; }
+.four-workspaces[data-finish=lab] .workspace-functions button.active { color: #172c2c; background: var(--panel-selection); box-shadow: inset 3px 0 var(--accent-on-paper); font-weight: 650; }
+.four-workspaces[data-finish=lab] .workspace-functions button.active svg { color: var(--accent-on-paper); }
+.four-workspaces[data-finish=lab] .workspace-functions > div > button:hover, .four-workspaces[data-finish=lab] :is(.project-explorer, .side-tabs) button:hover { background: #cedad7; }
+.four-workspaces[data-finish=lab] .project-explorer :is(button.active, .explorer-devices > button.active, .explorer-opened > div > div.active) { background: #d1ddda; color: #132f31; }
+.four-workspaces[data-finish=lab] .project-explorer :is(small, summary > span, .outline-empty, .muted, .explorer-target span, .explorer-target code) { color: #566a6c; }
+.four-workspaces[data-finish=lab] .project-explorer .explorer-file svg { color: #81612b; }
+.four-workspaces[data-finish=lab] .explorer-search { background: #f5f8f6; border-color: #bccac6; color: #536768; }
+.four-workspaces[data-finish=lab] .explorer-search input { color: var(--print); }
+.four-workspaces[data-finish=lab] .explorer-search input::placeholder { color: #627476; }
+.four-workspaces[data-finish=lab] .workspace-functions .menu-popup button { color: #e2eae8; }
+.four-workspaces[data-finish=lab] .panel-divider:not(.horizontal):not(:hover):not(:focus-visible) { background: var(--hairline); }
+.four-workspaces[data-finish=lab] .session-ribbon { background: #202b2d; border-color: #364346; padding-inline: 10px; }
+.four-workspaces[data-finish=lab] .session-ribbon .device-tabs > div.active { background: #354547; border-color: #4a5c5d; }
+.four-workspaces[data-finish=lab] .session-ribbon .device-tabs > div.active::after { display: none; }
+.four-workspaces[data-finish=lab] .ide-sidebar, .four-workspaces[data-finish=lab] .workspace-strip { color-scheme: light; }
+.four-workspaces[data-finish=lab] .connection-sidebar, .four-workspaces[data-finish=lab] .menu-popup { color-scheme: dark; }
+
+.four-workspaces[data-finish=lab][data-background=default] .main-shell:has(.page-workspace) { background: var(--paper); }
+.four-workspaces[data-finish=lab][data-background=default] .main-shell:has(.page-workspace) .page-heading h1 { color: var(--print); }
+.four-workspaces[data-finish=lab][data-background=default] .main-shell:has(.page-workspace) .page-symbol { color: var(--accent-on-paper); }
+.four-workspaces[data-finish=lab][data-background=default] .main-shell:has(.page-workspace) .page-actions :is(.session-status,button) { color: var(--secondary-print); }
+.four-workspaces[data-finish=lab][data-background=default] .main-shell:has(.page-workspace) .page-actions button { border-color: var(--hairline); }
+.four-workspaces[data-finish=lab][data-background=default] .main-shell:has(.page-workspace) .page-actions button:hover:enabled { background: #dce8e2; }
+.four-workspaces[data-finish=lab] .metrics-row { gap: 0; align-items: center; background: #f7f9f7; color: var(--print); border: 1px solid var(--hairline); border-radius: 6px; }
+.four-workspaces[data-finish=lab] .metrics-row .metric { background: transparent; border: 0; border-radius: 0; padding: 0 16px; min-width: 0; }
+.four-workspaces[data-finish=lab] .metrics-row .metric + .metric { border-left: 1px solid var(--hairline); }
+.four-workspaces[data-finish=lab] .metric-label, .four-workspaces[data-finish=lab] .metric-label > span:last-child { color: var(--secondary-print); }
+.four-workspaces[data-finish=lab] .metric-label > .channel-dot { box-shadow: inset 0 0 0 1px #0002; width: 8px; height: 8px; }
+.four-workspaces[data-finish=lab] .metric-value { font-size: 29px; font-weight: 600; color: #1c3030; }
+.four-workspaces[data-finish=lab] .metric-value small { color: var(--secondary-print); font-weight: 400; }
+.four-workspaces[data-finish=lab] .metric-value .channel-trend { filter: brightness(.65) saturate(1.2); }
+.four-workspaces[data-finish=lab] .wave-panel { border: 1px solid #33484a; border-radius: 8px; background: #142122; }
+.four-workspaces[data-finish=lab] .wave-panel > .panel-toolbar { background: #253638; border-color: #3b4b4c; }
+.four-workspaces[data-finish=lab] .wave-main { background: #101c1e; }
+.four-workspaces[data-finish=lab] .scope-control-deck, .four-workspaces[data-finish=lab] .scope-control-deck > div { background: #1b292b; }
+.four-workspaces[data-finish=lab] .wave-panel .panel-title { font-size: 16px; }
+.four-workspaces[data-finish=lab] .wave-panel .live-chip { font: 10px var(--mono); color: #bdcdcc; padding: 3px 6px; border: 1px solid #485858; border-radius: 3px; }
+.four-workspaces[data-finish=lab] .wave-panel .measure-panel { background: #243234; border-color: #425154; }
+.four-workspaces[data-finish=lab] .wave-panel .plot-footer { background: #1b292b; border-color: #344649; }
+.four-workspaces[data-finish=lab] .scope-standby > div { background: #101c1ef5; padding: 16px 20px; gap: 9px; }
+.four-workspaces[data-finish=lab] .scope-standby strong { font-size: 17px; color: #e4edeb; font-weight: 550; }
+.four-workspaces[data-finish=lab] .scope-standby .empty-actions { gap: 8px; margin-top: 3px; }
+.four-workspaces[data-finish=lab] .scope-standby .empty-actions button { height: 29px; padding: 0 9px; color: #c6d6d4; border-color: #425354; }
+.four-workspaces[data-finish=lab] .scope-standby .empty-actions button:first-child { color: var(--accent-ink); background: var(--accent); border-color: transparent; }
+.four-workspaces[data-finish=lab] .scope-standby .empty-actions svg { color: inherit; }
+.four-workspaces[data-finish=lab] .rotary-knob { background: linear-gradient(135deg,#748181 0%, #4a5758 30%, #303b3e 78%); box-shadow: 0 2px 3px #0009, inset 0 0 0 4px #414c4f; border-color: #192224; margin: 6px 0; }
+.four-workspaces[data-finish=lab] .rotary-knob::before { content: ''; position: absolute; inset: -8px; pointer-events: none; border-radius: 50%; background: repeating-conic-gradient(from -137deg,#a8b9b7 0 1.7deg, transparent 1.7deg 13.5deg); mask-image: radial-gradient(closest-side,transparent 85%,#000 87%); clip-path: polygon(0 0,100% 0,100% 100%,85% 100%,50% 50%,15% 100%,0 100%); }
+.four-workspaces[data-finish=lab] .rotary-label, .four-workspaces[data-finish=lab] .measurement-row > span { color: #b9c9ca; }
+.four-workspaces[data-finish=lab] .rotary-control output { color: #f2f6f4; font-size: 12px; }
+.four-workspaces[data-finish=lab] .terminal-panel.is-collapsed .panel-toolbar { background: #283437; }
+.four-workspaces[data-finish=lab] .main-shell:has(.page-workspace) .context-sendbar { background: #202a2c; padding: 0 12px; border-radius: 6px 6px 0 0; }
+.four-workspaces[data-finish=lab] .context-sendbar .send-bar { border: 0; }
+.four-workspaces[data-finish=lab] .status-bar { background: #192325; border-color: #344448; }
+.four-workspaces[data-finish=lab] .theme-preview-toolbar { background: #e6ebea; color: #203033; }
+.four-workspaces[data-finish=lab] .theme-preview-toolbar span:last-child { color: #506265; }
+.four-workspaces[data-finish=lab] .app-header .alarm-bell { color: var(--secondary-print); }
+.four-workspaces[data-finish=lab] .workspace-functions > summary::marker, .four-workspaces[data-finish=lab] .project-explorer summary::marker { color: #76898a; }
+.four-workspaces[data-finish=lab] .explorer-heading { padding-inline: 14px; }
+.four-workspaces[data-finish=lab] .explorer-root { font-weight: 600; padding-top: 14px; }
+.four-workspaces[data-finish=lab] .project-explorer .explorer-search { margin-top: 4px; }
+.four-workspaces[data-finish=lab] .agent-console:not(.compact-agent) .agent-messages:has(> .agent-empty) { display: grid; align-items: center; }
+.four-workspaces[data-finish=lab] .agent-console:not(.compact-agent) .agent-empty { width: min(540px, 100%); min-width: 0; margin-inline: auto; }
+.four-workspaces[data-finish=lab] .agent-console:not(.compact-agent) .console-welcome { gap: 14px; }
+.four-workspaces[data-finish=lab] .agent-console:not(.compact-agent) .console-welcome > svg { box-sizing: content-box; padding: 9px; border: 1px solid #476461; background: #233a39; border-radius: 6px; }
+.four-workspaces[data-finish=lab] .agent-console:not(.compact-agent) .console-welcome h2 { min-width: 0; overflow-wrap: anywhere; color: #eef5f3; font-size: 23px; }
+.four-workspaces[data-finish=lab] .agent-console:not(.compact-agent) .agent-skill-launcher { display: grid; grid-template-columns: repeat(auto-fit,minmax(min(140px,100%),1fr)); gap: 8px; }
+.four-workspaces[data-finish=lab] .agent-console:not(.compact-agent) .agent-skill-launcher button { align-items: flex-start; flex-direction: column; justify-content: space-between; min-height: 71px; padding: 11px 13px; font: 13px 'Segoe UI','Microsoft YaHei UI',sans-serif; }
+.four-workspaces[data-finish=lab] .agent-skill-launcher button:hover { background: #293638; }
+
+@media(min-width:901px) {
+  .four-workspaces[data-finish=lab] .main-shell { padding-inline: 20px; }
+  .four-workspaces[data-finish=lab] :is(.session-ribbon,.workpage-tabs) { margin-inline: -20px; padding-inline: 20px; }
+  .four-workspaces[data-finish=lab] .page-heading { height: 62px; }
+  .four-workspaces[data-finish=lab] .page-heading h1 { font-size: 25px; }
+  .four-workspaces[data-finish=lab] .workspace-page { grid-template-rows: 74px minmax(300px,1fr) minmax(96px,.24fr); gap: 11px; }
+  .four-workspaces[data-finish=lab] .workspace-page.terminal-collapsed { grid-template-rows: 74px minmax(300px,1fr) 41px; }
+}
+@media(max-width:600px) {
+  .four-workspaces[data-finish=lab] .workspace-switcher { gap: 2px; }
+  .four-workspaces[data-finish=lab] .session-ribbon { padding-inline: 7px; }
+  .four-workspaces[data-finish=lab] .metrics-row .metric { padding: 0 9px; }
+  .four-workspaces[data-finish=lab] .metric-value { font-size: 21px; }
+  .four-workspaces[data-finish=lab] .wave-panel .panel-title { font-size: 14px; }
+  .four-workspaces[data-finish=lab] .scope-standby > div { padding: 8px 12px; gap: 5px; }
+  .four-workspaces[data-finish=lab] .scope-standby strong { font-size: 15px; }
+  .scope-control-deck .scope-toolbar { flex-basis: 100%; }
+  .scope-control-deck .trigger-bar { width: 100%; margin: 0; }
+}
