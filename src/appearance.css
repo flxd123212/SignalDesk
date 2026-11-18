@@ -5,12 +5,13 @@
 .app-shell[data-background=default] .workbench-background { display: none; }
 .ide-shell[data-background]:not([data-background=default]) { background: transparent; }
 .ide-shell[data-background]:not([data-background=default]) .main-shell { background: transparent; }
-.ide-shell[data-background]:not([data-background=default]) :is(.app-header, .navigation, .status-bar) { background: #15191deb; }
-.ide-shell[data-background]:not([data-background=default]) :is(.ide-sidebar, .agent-dock, .bottom-dock) { background: #191e23d9; }
-.ide-shell[data-background]:not([data-background=default]) :is(.workpage-tabs, .source-tabs, .side-tabs, .dock-tabs, .panel-toolbar) { background: #1b2025df; }
-.ide-shell[data-background]:not([data-background=default]) :is(.tool-panel, .metrics-row, .agent-page, .agent-conversation) { background: #14191fcc; }
-.ide-shell[data-background]:not([data-background=default]) :is(.agent-compose, .agent-controls, .agent-session-bar, .agent-project-context) { background: #151a20d9; }
-.ide-shell[data-background]:not([data-background=default]) :is(.source-workspace, .terminal-panel, .waveform-panel) { background: #14191fe6; }
+.ide-shell[data-finish=lab][data-background]:not([data-background=default]) .main-shell { background: #111d2099; }
+.ide-shell[data-finish=graphite][data-background]:not([data-background=default]) :is(.app-header, .navigation, .status-bar) { background: #15191deb; }
+.ide-shell[data-finish=graphite][data-background]:not([data-background=default]) :is(.ide-sidebar, .agent-dock, .bottom-dock) { background: #191e23d9; }
+.ide-shell[data-finish=graphite][data-background]:not([data-background=default]) :is(.workpage-tabs, .source-tabs, .side-tabs, .dock-tabs, .panel-toolbar) { background: #1b2025df; }
+.ide-shell[data-finish=graphite][data-background]:not([data-background=default]) :is(.tool-panel, .metrics-row, .agent-page, .agent-conversation) { background: #14191fcc; }
+.ide-shell[data-finish=graphite][data-background]:not([data-background=default]) :is(.agent-compose, .agent-controls, .agent-session-bar, .agent-project-context) { background: #151a20d9; }
+.ide-shell[data-finish=graphite][data-background]:not([data-background=default]) :is(.source-workspace, .terminal-panel, .waveform-panel) { background: #14191fe6; }
 .ide-shell .primary, .ide-shell .connect-button:not(.connected) { background: var(--accent); color: var(--accent-ink); }
 .ide-shell .primary:hover:not(:disabled), .ide-shell .connect-button:not(.connected):hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
 .ide-shell .add-project-button { color: var(--accent-label); border-color: color-mix(in srgb, var(--accent) 35%, #333b40); background: color-mix(in srgb, var(--accent) 14%, #1b2227); }
