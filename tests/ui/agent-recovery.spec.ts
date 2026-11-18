@@ -4,7 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
 
-test('Agent pauses visibly at its budget, continues with evidence and reports DSML rather than silently completing', async ({ page, request }) => {
+test('Agent shows unfinished plan after model finishes, continues with evidence and reports DSML rather than silently completing', async ({ page, request }) => {
   const original = (await (await request.get('/api/ai/state')).json()).config;
   const root = await fs.mkdtemp(path.join(os.tmpdir(), 'signaldesk-recovery-ui-'));
   await fs.writeFile(path.join(root, 'main.c'), 'int sensorValue = 42;\nint main(void) { return sensorValue; }\n');
@@ -27,14 +27,14 @@ test('Agent pauses visibly at its budget, continues with evidence and reports DS
     await request.post('/api/ai/clear', { data: {} });
     await page.goto('/?view=agent');
     await page.getByRole('button', { name: '展开会话与分析设置', exact: true }).click();
-    await page.getByLabel('Agent 步骤上限').fill('2');
+    await expect(page.getByLabel('Agent 步骤上限')).toHaveCount(0);
     await page.getByLabel('Agent 工作模式').selectOption('review');
     await page.getByRole('button', { name: '收起会话与分析设置', exact: true }).click();
     const input = page.getByLabel('Agent 分析请求'); await input.fill('检查传感器返回值'); await input.press('Control+Enter');
-    await expect(page.getByLabel('Agent 运行状态')).toContainText('任务暂停');
+    await expect(page.getByLabel('Agent 运行状态')).toContainText('计划仍有未完成项');
     const recovery = page.getByLabel('继续未完成任务', { exact: true });
     await expect(recovery).toContainText('1 项未完成'); await expect(page.locator('.console-prompt-heading')).toContainText('PAUSED');
-    expect(count).toBe(2); expect(received[1].tools).toBeUndefined();
+    expect(count).toBe(2); expect(received[1].tools.length).toBeGreaterThan(0);
     const current = await (await request.get('/api/ai/state')).json();
     expect((await request.post('/api/ai/resume', { data: {} })).ok()).toBe(false);
     expect((await request.post('/api/ai/resume', { data: { deviceId: current.deviceId, root, sessionId: 'stale-session' } })).ok()).toBe(false);
@@ -43,7 +43,7 @@ test('Agent pauses visibly at its budget, continues with evidence and reports DS
     await page.setViewportSize({ width: 390, height: 844 });
     expect(await recovery.evaluate(element => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await page.screenshot({ path: 'artifacts/agent-budget-paused-mobile.png', fullPage: true });
-    await page.getByLabel('继续任务步骤预算').selectOption('12');
+    await expect(page.getByLabel('继续任务步骤预算')).toHaveCount(0);
     await page.getByRole('button', { name: '继续任务', exact: true }).click();
     await expect(page.getByLabel('Agent 运行状态')).toContainText('本轮分析完成'); await expect(recovery).toHaveCount(0);
     expect(count).toBe(4); expect(JSON.stringify(received[2].messages)).toContain('sensorValue');

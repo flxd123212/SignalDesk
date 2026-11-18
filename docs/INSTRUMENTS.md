@@ -32,8 +32,8 @@ recording, protocols, alarms and command groups use the same engine as wired ser
 
 The configured COM baud rate is not the Bluetooth RF bitrate. Link throughput and
 latency depend on the adapter, remote firmware and radio conditions. Some boards
-only expose BLE; BLE GATT/NUS needs service and characteristic UUIDs plus a separate
-transport adapter and is not implemented here. Not all ESP32 variants support SPP.
+only expose BLE. Use Engineering Lab's GATT browser to select their service and
+characteristic UUIDs or handles. See [Bench instruments](BENCH.md).
 Mock transport tests passed; physical Bluetooth hardware has not been validated.
 
 ## Scope and Frequency

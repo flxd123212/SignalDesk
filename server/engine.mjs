@@ -36,7 +36,7 @@ export class SerialEngine extends EventEmitter {
   }
 
   state() {
-    return { connected: this.connected, busy: this.busy, source: this.source, config: this.config, rxBytes: this.rxBytes, txBytes: this.txBytes, frames: this.sampleIndex, parseErrors: this.parser.errors, processingErrors: this.processingErrors, dropped: this.dropped, quality: { crcErrors: this.parser.crcErrors || 0, resyncBytes: this.parser.resyncBytes || 0, pendingBytes: this.parser.buffer.length, recordingErrors: this.recordingErrors, decodeMs: this.decodeMs, maxChunkBytes: this.maxChunkBytes, maxDecodeMs: this.maxDecodeMs }, latest: this.latest, names: this.names, rawNames: this.rawNames, lastSampleAt: this.lastSampleAt, validSamples: this.validSamples, processingMode: this.processingMode, graphValues: this.processing?.latestValues || {}, graphInputs: this.processing?.latestInputs || {}, recording: this.store.recording ? { id: this.store.recording.id, bytes: this.store.recording.bytes } : null, timedSend: this.sendInterval ? this.sendIntervalMs : null, replay: this.replay ? { id: this.replay.id, duration: this.replay.duration, position: this.replay.position, speed: this.replay.speed, playing: !!this.replayTimer } : null };
+    return { connected: this.connected, busy: this.busy, source: this.source, config: this.config, rxBytes: this.rxBytes, txBytes: this.txBytes, frames: this.sampleIndex, parseErrors: this.parser.errors, processingErrors: this.processingErrors, dropped: this.dropped, quality: { crcErrors: this.parser.crcErrors || 0, resyncBytes: this.parser.resyncBytes || 0, pendingBytes: this.parser.buffer.length, recordingErrors: this.recordingErrors, decodeMs: this.decodeMs, maxChunkBytes: this.maxChunkBytes, maxDecodeMs: this.maxDecodeMs }, latest: this.latest, names: this.names, rawNames: this.rawNames, lastSampleAt: this.lastSampleAt, validSamples: this.validSamples, processingMode: this.processingMode, processingRevision: this.processingRevision || 0, graphValues: this.processing?.latestValues || {}, graphInputs: this.processing?.latestInputs || {}, recording: this.store.recording ? { id: this.store.recording.id, bytes: this.store.recording.bytes } : null, timedSend: this.sendInterval ? this.sendIntervalMs : null, replay: this.replay ? { id: this.replay.id, duration: this.replay.duration, position: this.replay.position, speed: this.replay.speed, playing: !!this.replayTimer } : null };
   }
 
   emitState() { this.emit('state', this.state()); }
@@ -105,7 +105,7 @@ export class SerialEngine extends EventEmitter {
     await this.store.stop(); this.emitState();
   }
 
-  receive(bytes, direction = 'RX', recording = true) {
+  receive(bytes, direction = 'RX', recording = true, replaySampleTime) {
     if (direction === 'RX') this.rxBytes += bytes.length; else this.txBytes += bytes.length;
     if (recording) this.store.write(direction, bytes);
     const packet = { id: ++this.packetId, time: Date.now(), dir: direction, data: bytes.toString('base64'), length: bytes.length };
@@ -115,13 +115,14 @@ export class SerialEngine extends EventEmitter {
     const started = performance.now(); this.maxChunkBytes = Math.max(this.maxChunkBytes, bytes.length);
     const samples = [];
     for (const values of this.parser.push(bytes)) {
-      const time = this.sampleIndex++ / this.config.sampleRate;
+      const time = replaySampleTime ?? this.sampleIndex / this.config.sampleRate; this.sampleIndex++;
       this.rawNames = this.config.protocol === 'custom' ? this.config.schema.fields.map(field => field.name) : values.map((_, index) => `CH${index + 1}`);
       try {
         const transformed = this.processing ? this.processing.run(values) : values;
         this.latest = transformed;
         this.validSamples++; this.lastSampleAt = Date.now();
         this.names = this.processing ? this.processing.names : this.config.protocol === 'custom' ? this.config.schema.fields.map(field => field.name) : transformed.map((_, index) => `CH${index + 1}`);
+        if (this.source==='replay' && this.replay?.channelName) { this.rawNames=[this.replay.channelName]; if(!this.processing)this.names=this.rawNames; }
         samples.push({ time, values: transformed });
       } catch (error) {
         this.processingErrors++;
@@ -133,6 +134,7 @@ export class SerialEngine extends EventEmitter {
   }
 
   async send(payload, owner = null) {
+    if (this.source === 'ble') throw new Error('请通过 GATT 特征写入命令');
     if (this.automationLock && this.automationLock !== owner) throw new Error('该设备正在自动测试，请先停止测试');
     const bytes = encodePayload(payload);
     if (!this.connected || this.source === 'replay') throw new Error('请先连接串口或模拟设备');
@@ -185,6 +187,7 @@ export class SerialEngine extends EventEmitter {
     if (!['raw', 'script', 'graph'].includes(mode)) throw new Error('无效的处理模式');
     const next = mode === 'script' ? compileScript(script) : mode === 'graph' ? compileGraph(graph, { sampleRate: this.config.sampleRate }) : null;
     this.processingDefinition = next ? structuredClone({ mode, script, graph }) : null;
+    this.processingRevision = (this.processingRevision || 0) + 1;
     this.processing = next; this.processingMode = mode; this.processingErrors = 0;
     this.latest = []; this.history = []; this.names = next?.names || []; this.emit('reset'); this.emitState();
   }
@@ -220,7 +223,7 @@ export class SerialEngine extends EventEmitter {
         let budget = 1000;
         while (replay.index < replay.packets.length && replay.packets[replay.index].time <= replay.position && budget-- > 0) {
           const packet = replay.packets[replay.index++];
-          this.receive(Buffer.from(packet.data, 'base64'), packet.dir, false);
+          this.receive(Buffer.from(packet.data, 'base64'), packet.dir, false, replay.channelName ? packet.time / 1000 : undefined);
         }
         if (replay.index === replay.packets.length) { clearInterval(this.replayTimer); this.replayTimer = null; this.emitState(); }
       }, 20);

@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.16)
+project(StcHeartbeat NONE)
+find_program(SDCC sdcc REQUIRED)
+add_custom_command(OUTPUT heartbeat.ihx COMMAND "${SDCC}" -mmcs51 --model-small -o heartbeat.ihx "${CMAKE_CURRENT_SOURCE_DIR}/main.c" DEPENDS main.c VERBATIM)
+add_custom_target(firmware ALL DEPENDS heartbeat.ihx)

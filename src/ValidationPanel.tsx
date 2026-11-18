@@ -4,9 +4,17 @@ import { api, download, formatBytes } from './data';
 import { IconButton } from './ui';
 import { BuildSettings } from './BuildSettings';
 
-export type ValidationRequest = { id: number; mode: 'build' | 'test' };
+export type ValidationRequest = { id: number; mode: 'build' | 'test' | 'problems' | 'memory' };
+
+function BoardRuleIssues({root,deviceId}:{root:string;deviceId:string}) {
+  const [report,setReport]=useState<{source:string;count:number;rows:string[][]}|null>(null);
+  useEffect(()=>{let active=true;api<typeof report>(`/lab/issues?${new URLSearchParams({root,deviceId})}`).then(r=>{if(active)setReport(r);}).catch(()=>{});return()=>{active=false;};},[deviceId,root]);
+  if(!report)return null;
+  return <details open className="validation-problems"><summary>{report.source} · {report.count} 项</summary>{report.rows.map((row,i)=><p key={i}><strong>{row[0]}</strong>　{row.slice(1).filter(Boolean).join(' · ')}</p>)}</details>;
+}
+type MemoryRegion = { source: string; region: string; used: number; capacity: number };
 type Diagnostic = { path: string; location: string; line: number; column: number; severity: string; message: string };
-type Job = { status: string; command: string; cwd: string; output: string; outputTruncated?: boolean; artifacts?: { path: string; bytes: number; architecture: string }[]; startedAt: string; finishedAt?: string; exitCode: number | null; summary: string; elapsedMs: number; diagnostics: Diagnostic[]; validation?: { id: string; kind: string; label: string; fingerprint: string; sourceState: string } };
+type Job = { memoryRegions?: MemoryRegion[]; status: string; command: string; cwd: string; output: string; outputTruncated?: boolean; artifacts?: { path: string; bytes: number; architecture: string }[]; startedAt: string; finishedAt?: string; exitCode: number | null; summary: string; elapsedMs: number; diagnostics: Diagnostic[]; validation?: { deviceId: string; sessionId: string; id: string; kind: string; label: string; fingerprint: string; sourceState: string } };
 type RunState = { deviceId: string; sessionId: string; root: string; readOnly: boolean; job: Job | null; history: Job[] };
 type Capabilities = { deviceId: string; sessionId: string; root: string; preset: string; readOnly: boolean; note: string; choices: { id: string; label: string; note: string }[] };
 type Props = { deviceId: string; root: string; request?: ValidationRequest; consume: () => void; openSource: (file: string, line: number) => void; analyze: (file: string, prompt: string) => void; deviceTests: () => void };
@@ -14,8 +22,9 @@ type Props = { deviceId: string; root: string; request?: ValidationRequest; cons
 export function ValidationPanel({ deviceId, root, request, consume, openSource, analyze, deviceTests }: Props) {
   const [settings, setSettings] = useState(false);
   const [state, setState] = useState<RunState | null>(null), [caps, setCaps] = useState<Capabilities | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
-  const [choice, setChoice] = useState(''), [configuration, setConfiguration] = useState('Debug'), [view, setView] = useState<'output' | 'problems' | 'history' | 'artifacts'>('output'), [selected, setSelected] = useState<Job | null>(null);
+  const [choice, setChoice] = useState(''), [configuration, setConfiguration] = useState('Debug'), [view, setView] = useState<'output' | 'problems' | 'history' | 'artifacts' | 'memory'>('output'), [selected, setSelected] = useState<Job | null>(null);
   const alive = useRef(true), handled = useRef(0), loadingCaps = useRef(false), activeRun = useRef(false), output = useRef<HTMLPreElement>(null), follow = useRef(true);
+  const testChoice = useRef<HTMLSelectElement>(null), [focusTest, setFocusTest] = useState(false);
   const query = new URLSearchParams({ deviceId, root }).toString();
   const refreshCaps = async () => {
     if (loadingCaps.current) return;
@@ -49,11 +58,17 @@ export function ValidationPanel({ deviceId, root, request, consume, openSource, 
     if (!request || handled.current === request.id) return;
     handled.current = request.id; consume();
     if (request.mode === 'build') void run('build');
-    else { setView('output'); void refreshCaps(); }
+    else if (request.mode === 'problems' || request.mode === 'memory') setView(request.mode);
+    else { setView('output'); setFocusTest(true); void refreshCaps(); }
   }, [request?.id]);
   const current = state?.job, job = selected || current;
   const running = busy || current?.status === 'running' || ['running', 'checking'].includes(current?.validation?.sourceState || '');
   const disabled = running || !state || !caps || state.readOnly || caps.readOnly || state.sessionId !== caps.sessionId;
+  useEffect(() => {
+    if (!focusTest || !state || !caps) return;
+    if (!disabled && caps.choices.length) testChoice.current?.focus();
+    setFocusTest(false);
+  }, [focusTest, state, caps, disabled]);
   const errors = job?.diagnostics.filter(item => item.severity === 'error').length || 0, warnings = job?.diagnostics.filter(item => item.severity === 'warning').length || 0;
   const diagnostics = [...(job?.diagnostics || [])].sort((a, b) => (a.severity === 'error' ? 0 : 1) - (b.severity === 'error' ? 0 : 1));
   useEffect(() => { if (follow.current && output.current) output.current.scrollTop = output.current.scrollHeight; }, [job?.output, view]);
@@ -62,18 +77,20 @@ export function ValidationPanel({ deviceId, root, request, consume, openSource, 
       <IconButton title="设置构建工具" disabled={running || !state || state.readOnly} onClick={() => setSettings(true)}><Wrench size={14} /></IconButton>
       <button className="quiet-button" disabled={disabled} onClick={() => void run('build')}><Hammer size={14} />编译工程</button>
       {['cmake', 'gcc'].includes(caps?.preset || '') && <><IconButton title={caps?.preset === 'gcc' ? '配置 GCC 工程' : '配置 CMake 工程'} disabled={disabled} onClick={() => void run('configure')}><Settings2 size={15} /></IconButton><select aria-label="构建配置" value={configuration} onChange={event => setConfiguration(event.target.value)} disabled={running}><option>Debug</option><option>Release</option><option>RelWithDebInfo</option><option>MinSizeRel</option></select></>}
-      <select aria-label="测试目标" value={choice} onChange={event => setChoice(event.target.value)} disabled={disabled || !caps?.choices.length}><option value="">{caps?.choices.length ? '选择测试目标' : '未发现测试入口'}</option>{caps?.choices.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
+      <select ref={testChoice} aria-label="测试目标" value={choice} onChange={event => setChoice(event.target.value)} disabled={disabled || !caps?.choices.length}><option value="">{caps?.choices.length ? '选择测试目标' : '未发现测试入口'}</option>{caps?.choices.map(item => <option key={item.id} value={item.id}>{item.label}</option>)}</select>
       <IconButton title="运行选定测试" disabled={disabled || !choice} onClick={() => void run('test')}><FlaskConical size={15} /></IconButton>
       <IconButton title="停止验证任务" disabled={!current?.validation || current.status !== 'running' || !!state?.readOnly} onClick={async () => { try { setState(await api<RunState>('/validation/cancel', { deviceId, root, sessionId: state?.sessionId, id: current?.validation?.id })); } catch (error) { setError((error as Error).message); } }}><Square size={13} /></IconButton>
       <IconButton title="刷新测试入口" disabled={running} onClick={() => { setError(''); void refreshCaps(); }}><RefreshCw size={14} /></IconButton>
       <span className="validation-target" title={root}>{root.split(/[\\/]/).at(-1)} · {caps?.preset || '待配置'}</span>
       <IconButton title="设备通信测试" onClick={deviceTests}><Plug size={14} /></IconButton>
-      <IconButton title="导出验证报告" disabled={!job} onClick={() => { if (job) download(`validation-${job.startedAt.replace(/[:.]/g, '-')}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), deviceId, sessionId: state?.sessionId, ...job }, null, 2), 'application/json'); }}><Download size={15} /></IconButton>
+      <IconButton title="导出验证报告" disabled={!job} onClick={() => { if (job) download(`validation-${job.startedAt.replace(/[:.]/g, '-')}.json`, JSON.stringify({ exportedAt: new Date().toISOString(), deviceId: job.validation?.deviceId ?? deviceId, sessionId: job.validation?.sessionId, ...job }, null, 2), 'application/json'); }}><Download size={15} /></IconButton>
       <IconButton title="交给 Agent 排查" disabled={!job || running} onClick={() => { if (job) analyze(job.diagnostics.find(item => item.path)?.path || '', `请分析当前工程的编译/测试结果，结合源码给出原因和修改建议，先不要执行或修改。\n${job.command}\n${job.summary}\n${JSON.stringify(job.diagnostics)}\n${job.output.slice(-10000)}`); }}><Bot size={15} /></IconButton>
     </div>
     {error && <div className="validation-error" role="alert"><AlertCircle size={14} />{error}</div>}
-    <div className="validation-results-heading"><div className="validation-views">{(['output', 'problems', 'history', 'artifacts'] as const).map(id => <button key={id} aria-pressed={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>{id === 'output' ? '输出' : id === 'problems' ? `问题 ${errors + warnings}` : id === 'history' ? `记录 ${state?.history.length || 0}` : `产物 ${job?.artifacts?.length || 0}`}</button>)}</div><span className={`validation-summary ${job?.status || ''}`} title={job?.summary}>{job?.summary || (state?.readOnly ? '当前为只读会话' : '尚未执行验证')}</span>{job && <small>{(job.elapsedMs / 1000).toFixed(1)}s</small>}{selected && <button className="quiet-button" onClick={() => setSelected(null)}>当前任务</button>}</div>
+    <div className="validation-results-heading"><div className="validation-views">{(['output', 'problems', 'history', 'artifacts', 'memory'] as const).map(id => <button key={id} aria-pressed={view === id} className={view === id ? 'active' : ''} onClick={() => setView(id)}>{id === 'output' ? '输出' : id === 'problems' ? `问题 ${errors + warnings}` : id === 'history' ? `记录 ${state?.history.length || 0}` : id === 'memory' ? '容量' : `产物 ${job?.artifacts?.length || 0}`}</button>)}</div><span className={`validation-summary ${job?.status || ''}`} title={job?.summary}>{job?.summary || (state?.readOnly ? '当前为只读会话' : '尚未执行验证')}</span>{job && <small>{(job.elapsedMs / 1000).toFixed(1)}s</small>}{selected && <button className="quiet-button" onClick={() => setSelected(null)}>当前任务</button>}</div>
     <div className="validation-body">
+      {view === 'memory' && <><button onClick={()=>window.dispatchEvent(new Event('signaldesk-size-diff'))}>比较两次构建</button><MemoryReport regions={job?.memoryRegions || []} /></>}
+      {view === 'problems' && root && <BoardRuleIssues key={`${deviceId}:${root}:${request?.id||''}`} root={root} deviceId={deviceId}/>}
       {view === 'output' && <><div className="validation-note">{caps?.choices.find(item => item.id === choice)?.note || caps?.note}{job?.validation?.sourceState === 'changed' && ' 本次结果对应较早源码。'}{job?.outputTruncated && ' 输出过长，仅显示末尾 64,000 字符。'}</div>
         {job ? <pre ref={output} className="validation-output" onScroll={event => { const element = event.currentTarget; follow.current = element.scrollHeight - element.scrollTop - element.clientHeight < 40; }}>{`${job.command}\n${job.output}${job.exitCode !== null ? `\nexit ${job.exitCode}` : ''}`}</pre>
           : <div className="work-empty validation-idle"><FlaskConical className="empty-symbol" size={42} /><h2>暂无编译或测试输出</h2><button className="quiet-button" disabled={running || !state || state.readOnly} onClick={() => setSettings(true)}><Wrench size={14} />配置构建工具</button></div>}
@@ -84,4 +101,14 @@ export function ValidationPanel({ deviceId, root, request, consume, openSource, 
     </div>
     {settings && <BuildSettings deviceId={deviceId} root={root} saved={() => { setError(''); void refreshCaps(); }} close={() => setSettings(false)} />}
   </section>;
+}
+
+function MemoryReport({ regions }: { regions: MemoryRegion[] }) {
+  if (!regions.length) return <div className="validation-note">当前记录没有分区容量数据。使用 GNU ld 的工程可在链接选项中添加 <code>-Wl,--print-memory-usage</code>，并在链接脚本中定义 <code>MEMORY</code> 分区后重新编译。</div>;
+  return <div className="validation-artifacts"><table aria-label="固件容量"><thead><tr><th>工具 / 分区</th><th>已用</th><th>总量</th><th>余量</th><th>占用率</th></tr></thead><tbody>{regions.map(({ source, region, used, capacity }, index) => {
+    const remaining = capacity - used;
+    const percentage = 100 * used / capacity;
+    const usage = used > 0 && percentage < 0.01 ? '<0.01%' : `${percentage.toFixed(2)}%`;
+    return <tr key={index}><td>{source} · <b>{region}</b></td><td title={`${used} B`}>{formatBytes(used)}</td><td title={`${capacity} B`}>{formatBytes(capacity)}</td><td className={remaining < 0 ? 'warning' : ''} title={`${remaining} B`}>{remaining < 0 ? '超出 ' : ''}{formatBytes(Math.abs(remaining))}</td><td>{usage}</td></tr>;
+  })}</tbody></table></div>;
 }

@@ -34,7 +34,7 @@ export function commandPlan(commandLine, root) {
 export function buildPlan(config, root) {
   if (config.buildConfiguration && !['Debug', 'Release', 'RelWithDebInfo', 'MinSizeRel'].includes(config.buildConfiguration)) throw new Error('构建配置无效');
   if (['gcc', 'gcc-configure'].includes(config.buildPreset)) return gccPlan(config, root);
-  if (config.buildPreset === 'cmake-configure') return { command: 'cmake', args: ['-S', '.', '-B', 'build', `-DCMAKE_BUILD_TYPE=${config.buildConfiguration || 'Debug'}`], cwd: root };
+  if (config.buildPreset === 'cmake-configure') return { command: 'cmake', args: ['-S', '.', '-B', 'build', ...(config.cmakeGenerator === 'Ninja' ? ['-G','Ninja'] : []), `-DCMAKE_BUILD_TYPE=${config.buildConfiguration || 'Debug'}`], cwd: root };
   if (config.buildPreset === 'test') {
     if (config.testRunner === 'python-unittest') return { command: 'python', args: ['-B', '-m', 'unittest', 'discover', '-s', 'tests'], cwd: root };
     if (config.testRunner === 'node-test') return { command: 'node', args: ['--test'], cwd: root };
@@ -89,7 +89,7 @@ export async function findIdfInvoker() {
 
 export class BuildRunner extends EventEmitter {
   constructor() { super(); this.job = null; this.child = null; }
-  async start(config, root) {
+  async start(config, root, signal) {
     if (this.child) throw new Error('已有构建正在运行');
     const plan = buildPlan(config, root);
     const gcc = plan.gcc ? await prepareGcc(config, root, findExecutable) : null;
@@ -103,6 +103,7 @@ export class BuildRunner extends EventEmitter {
     const idf = plan.command === 'idf.py' ? await findIdfInvoker() : null;
     const executable = idf ? idf.executable : plan.command === 'UV4' ? await findKeilExecutable(config.keilExecutable) : plan.command === 'IarBuild' ? await findIarExecutable(config.iarExecutable) : await findExecutable(plan.command);
     if (this.child) throw new Error('已有构建正在运行');
+    if (signal?.aborted) throw new Error('构建启动前已停止');
     this.job = { status: 'running', command: [plan.command, ...plan.args].join(' '), cwd: root, output: '', startedAt: new Date().toISOString(), exitCode: null, diagnostics: [], outputTruncated: false, ...(config.validationMeta ? { validation: config.validationMeta } : {}) };
     const child = spawn(executable, idf ? [idf.script, ...plan.args] : plan.args, { cwd: root, env: toolEnvironment(gcc?.env), detached: process.platform !== 'win32', windowsHide: true, shell: false, stdio: ['ignore', 'pipe', 'pipe'] });
     this.child = child;

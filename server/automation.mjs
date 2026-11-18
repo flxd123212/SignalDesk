@@ -24,13 +24,13 @@ export function validateTest(input) {
 export class TestRunner extends EventEmitter {
   constructor() { super(); this.job = null; this.controller = null; }
   state() { return this.job; }
-  async start(engine, input) {
+  async start(engine, input, deviceId) {
     if (this.controller || engine.automationLock) throw new Error('自动测试正在运行');
     if (!engine.connected || engine.source === 'replay') throw new Error('请连接目标设备');
     if (engine.sendInterval) throw new Error('请先停止定时发送');
     const plan = validateTest(input), token = randomUUID(), generation = engine.generation;
     const controller = this.controller = new AbortController(); engine.automationLock = token;
-    this.job = { id: token, name: plan.name, target: engine.config.path, status: 'running', results: [], startedAt: new Date().toISOString(), sampleRate: engine.config.sampleRate, protocol: engine.config.protocol, processingMode: engine.processingMode };
+    this.job = { id: token, deviceId, source: engine.source, name: plan.name, target: engine.config.path, status: 'running', results: [], startedAt: new Date().toISOString(), sampleRate: engine.config.sampleRate, protocol: engine.config.protocol, processingMode: engine.processingMode };
     let sentAtFrame = engine.validSamples;
     let received = Buffer.alloc(0);
     const receive = packet => { if (packet.dir === 'RX') received = Buffer.concat([received, Buffer.from(packet.data, 'base64')]).subarray(-65536); };

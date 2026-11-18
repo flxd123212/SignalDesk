@@ -12,23 +12,41 @@ type Binding = { id: string; ref: string; pin: string; gpio: string; net: string
 type Netlist = { name: string; hash: string; components: { ref: string; value: string; footprint: string; datasheet: string }[]; nets: { id: string; name: string; pins: { ref: string; pin: string; name: string }[] }[] };
 type Profile = { root: string; version: number; board: string; revision: string; notes: string; bindings: Binding[]; netlist: Netlist | null; files: { path: string; bytes: number }[]; checks: { level: string; message: string }[] };
 type Props = { state: AppState; live?: boolean; notify: (message: string, error?: boolean) => void; openSource: (file: string, line: number) => void; openTests: () => void };
+type HardwareDraft = { version: number; profile: Pick<Profile, 'board' | 'revision' | 'notes' | 'bindings'> };
+
+function editableFields({ board, revision, notes, bindings }: HardwareDraft['profile']) {
+  return { board, revision, notes, bindings };
+}
+
+function readDraft(key: string): HardwareDraft | null {
+  try {
+    const draft = JSON.parse(localStorage.getItem(key) || 'null');
+    const fields = draft?.profile;
+    if (!Number.isInteger(draft?.version) || !fields || ![fields.board, fields.revision, fields.notes].every(value => typeof value === 'string') || !Array.isArray(fields.bindings)) return null;
+    if (!fields.bindings.every((binding: Binding) => binding && typeof binding.id === 'string' && typeof binding.name === 'string')) return null;
+    return { version: draft.version, profile: editableFields(fields) };
+  } catch { return null; }
+}
 
 export function HardwareWorkbench({ state, live = false, notify, openSource, openTests }: Props) {
   const [profile, setProfile] = useState<Profile | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false), [dirty, setDirty] = useState(false), [selected, setSelected] = useState(''), [search, setSearch] = useState(''), [component, setComponent] = useState('');
   const [view, setView] = useState<'pins' | 'nets' | 'map'>(live ? 'map' : 'pins'), file = useRef<HTMLInputElement>(null), [sourceFiles, setSourceFiles] = useState<{ path: string }[]>([]);
   const root = state.devices?.find(device => device.id === state.activeDevice)?.projectRoot || '';
   const draftKey = `signaldesk.hardware-draft:${state.activeDevice}:${root}`;
+  const [conflict, setConflict] = useState<HardwareDraft | null>(null);
   const active = useRef(true), [clock, setClock] = useState(Date.now());
   useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 1000); return () => clearInterval(timer); }, []);
   const fresh = state.connected && !!state.lastSampleAt && clock - state.lastSampleAt < 3000;
-  const refresh = async () => {
+  const refresh = async (pending?: HardwareDraft) => {
     setBusy(true); setError('');
     try {
-      const next = await api<Profile>(`/hardware?deviceId=${encodeURIComponent(state.activeDevice || '')}`);
+      const next = await api<Profile>(`/hardware?deviceId=${encodeURIComponent(state.activeDevice || '')}&root=${encodeURIComponent(root)}`);
       if (!active.current) return;
-      let draft: { version: number; profile: Profile } | null = null; try { draft = JSON.parse(localStorage.getItem(draftKey) || 'null'); } catch { /* Ignore invalid drafts. */ }
-      if (draft?.version === next.version && Array.isArray(draft.profile.bindings)) { setProfile({ ...next, ...draft.profile, files: next.files, netlist: next.netlist }); setDirty(true); }
-      else { setProfile(next); setDirty(false); if (draft) setError('本地草稿与已保存版本冲突；已载入已保存版本，草稿仍保留在本地'); }
+      const draft = pending ?? readDraft(draftKey);
+      const compatible = draft?.version === next.version;
+      setProfile(compatible ? { ...next, ...draft.profile } : next);
+      setDirty(compatible);
+      setConflict(draft && !compatible ? draft : null);
     } catch (error) { if (active.current) setError((error as Error).message); } finally { if (active.current) setBusy(false); }
   };
   useEffect(() => { active.current = true; void refresh(); api<{ path: string }[]>(`/ai/files?deviceId=${encodeURIComponent(state.activeDevice || '')}`).then(files => { if (active.current) setSourceFiles(files); }).catch(() => {}); return () => { active.current = false; }; }, []);
@@ -37,7 +55,15 @@ export function HardwareWorkbench({ state, live = false, notify, openSource, ope
   const update = (patch: Partial<Binding>) => { if (profile) change({ bindings: profile.bindings.map(binding => binding.id === selected ? { ...binding, ...patch } : binding) }); };
   const save = async () => {
     if (!profile || busy) return; setBusy(true); setError('');
-    try { const saved = await api<Profile>('/hardware/save', { deviceId: state.activeDevice, root: profile.root, version: profile.version, profile }); if (!active.current) return; setProfile({ ...profile, ...saved }); setDirty(false); localStorage.removeItem(draftKey); notify('硬件工程与引脚映射已保存'); } catch (error) { if (active.current) setError((error as Error).message); } finally { if (active.current) setBusy(false); }
+    try {
+      const saved = await api<Profile>('/hardware/save', { deviceId: state.activeDevice, root: profile.root, version: profile.version, profile });
+      if (!active.current) return;
+      setProfile({ ...profile, ...saved }); setDirty(false); localStorage.removeItem(draftKey); notify('硬件工程与引脚映射已保存');
+    } catch (error) {
+      if (!active.current) return;
+      if ((error as { status?: number }).status === 409) await refresh({ version: profile.version, profile: editableFields(profile) });
+      else setError((error as Error).message);
+    } finally { if (active.current) setBusy(false); }
   };
   const importNetlist = async (input: { path?: string; xml?: string; name?: string }) => {
     if (!profile || busy) return; if (dirty) { setError('请先保存当前引脚配置，再导入网表'); return; } setBusy(true); setError('');
@@ -48,8 +74,17 @@ export function HardwareWorkbench({ state, live = false, notify, openSource, ope
   const inspector = useMemo(() => profile && <div className="hardware-inspector"><div className="inspector-heading">{binding ? '引脚与数据绑定' : '硬件工程属性'}</div>{binding ? <fieldset disabled={busy}>
     <Field label="信号名称"><input aria-label="硬件信号名称" value={binding.name} onChange={event => update({ name: event.target.value })} maxLength={80} /></Field><div className="hardware-field-pair"><Field label="器件编号"><input aria-label="器件编号" value={binding.ref} onChange={event => update({ ref: event.target.value })} /></Field><Field label="物理脚号"><input aria-label="物理脚号" value={binding.pin} onChange={event => update({ pin: event.target.value })} /></Field></div>
     <Field label="GPIO / 板上标号"><input aria-label="GPIO 标号" value={binding.gpio} onChange={event => update({ gpio: event.target.value })} /></Field><Field label="电气网络"><input aria-label="电气网络" value={binding.net} onChange={event => update({ net: event.target.value })} /></Field><Field label="数据通道"><select aria-label="硬件数据通道" value={binding.channel} onChange={event => update({ channel: Number(event.target.value) })}><option value={-1}>未绑定</option>{Array.from({ length: 16 }, (_, i) => <option key={i} value={i}>CH{i + 1}{state.names[i] ? ` · ${state.names[i]}` : ''}</option>)}</select></Field><Field label="单位"><input aria-label="硬件信号单位" value={binding.unit} onChange={event => update({ unit: event.target.value })} maxLength={16} /></Field><div className="hardware-field-pair"><Field label="期望下限"><input aria-label="硬件信号下限" type="number" step="any" value={binding.min ?? ''} onChange={event => update({ min: event.target.value === '' ? null : Number(event.target.value) })} /></Field><Field label="期望上限"><input aria-label="硬件信号上限" type="number" step="any" value={binding.max ?? ''} onChange={event => update({ max: event.target.value === '' ? null : Number(event.target.value) })} /></Field></div><Field label="关联源码"><input aria-label="硬件关联源码" list="hardware-source-files" value={binding.source} onChange={event => update({ source: event.target.value })} /><datalist id="hardware-source-files">{sourceFiles.map(file => <option value={file.path} key={file.path} />)}</datalist></Field><Field label="源码行号"><input aria-label="硬件源码行号" type="number" min={1} value={binding.line} onChange={event => update({ line: Number(event.target.value) })} /></Field><div className="lab-actions"><button className="quiet-button" disabled={!binding.source} onClick={() => openSource(binding.source, binding.line)}><FileCode2 size={14} />跳转源码</button><button className="danger-quiet" onClick={() => { change({ bindings: profile.bindings.filter(item => item.id !== binding.id) }); setSelected(''); }}><Trash2 size={14} />删除映射</button></div></fieldset> : <fieldset disabled={busy}><Field label="开发板名称"><input aria-label="硬件开发板名称" value={profile.board} onChange={event => change({ board: event.target.value })} maxLength={100} /></Field><Field label="硬件版本"><input aria-label="硬件版本" value={profile.revision} onChange={event => change({ revision: event.target.value })} maxLength={80} /></Field><Field label="工程备注"><textarea aria-label="硬件工程备注" value={profile.notes} onChange={event => change({ notes: event.target.value })} maxLength={4000} /></Field><code className="hardware-path">{profile.root}</code></fieldset>}</div>, [profile, selected, busy, sourceFiles, state.names]);
-  const showInspector = useInspector(inspector);
+  const showInspector = useInspector(conflict ? null : inspector);
   if (!profile) return <section className="hardware-workbench"><p role={error ? 'alert' : 'status'}>{error || '正在读取硬件工程'}</p><button onClick={() => void refresh()} disabled={busy}>重新读取</button></section>;
+  if (conflict) return <section className="hardware-workbench" aria-label="硬件草稿恢复"><div className="hardware-empty">
+    <h2>硬件映射存在两个版本</h2>
+    <p>本地草稿基于版本 {conflict.version}，包含 {conflict.profile.bindings.length} 个引脚映射。工程现为版本 {profile.version}，包含 {profile.bindings.length} 个映射。</p>
+    <p>恢复会将草稿中的开发板资料与全部引脚映射载入编辑器，点击保存后生效。</p>
+    {error && <p role="alert">{error}</p>}
+    <div className="lab-actions"><button className="primary" onClick={() => { setProfile({ ...profile, ...conflict.profile }); setDirty(true); setConflict(null); }}>恢复草稿</button>
+      <button className="quiet-button" onClick={() => { try { localStorage.removeItem(draftKey); setConflict(null); } catch { setError('无法清除本地草稿'); } }}>舍弃草稿并使用工程版本</button>
+      <button className="quiet-button" onClick={() => download('hardware-draft.json', JSON.stringify(conflict, null, 2), 'application/json')}><Download size={14} />导出草稿</button></div>
+  </div></section>;
   const netlist = profile.netlist, filter = search.toLowerCase(), rows = profile.bindings.filter(binding => [binding.name, binding.ref, binding.pin, binding.gpio, binding.net].some(value => value.toLowerCase().includes(filter)));
   return <section className="hardware-workbench" aria-label="硬件工程工作台"><div className="panel-toolbar"><div className="panel-title"><CircuitBoard size={17} /><span>{profile.board || '硬件工程'}</span><small className="small-tag">{profile.revision || '未标记版本'}</small></div><div className="toolbar-actions"><IconButton title="硬件工程属性" onClick={() => { setSelected(''); showInspector(); }}><CircuitBoard size={16} /></IconButton><IconButton title="刷新硬件工程" disabled={busy || dirty} onClick={() => void refresh()}><RefreshCw size={16} /></IconButton><button className="quiet-button" disabled={busy || dirty} onClick={() => file.current?.click()}><Upload size={15} />导入网表</button><IconButton title="导出硬件工程记录" onClick={() => download('signaldesk-hardware.json', JSON.stringify({ ...profile, device: state.devices?.find(device => device.id === state.activeDevice), exportedAt: new Date().toISOString(), readings: profile.bindings.map(binding => ({ id: binding.id, value: binding.channel >= 0 ? state.latest[binding.channel] ?? null : null, fresh, processingMode: state.processingMode })) }, null, 2), 'application/json')}><Download size={16} /></IconButton><button className="primary compact-button" disabled={busy || !dirty} onClick={() => void save()}><Save size={15} />保存映射</button></div></div>
     <div className="hardware-tabs"><div className="segmented">{(['pins', 'nets', 'map'] as const).map(tab => <button key={tab} aria-pressed={view === tab} className={view === tab ? 'active' : ''} onClick={() => setView(tab)}>{({ pins: '引脚与源码', nets: '网表与器件', map: '实时电路图' })[tab]}</button>)}</div><span className={fresh ? 'live-chip' : 'muted'}>{fresh ? '数据更新中' : state.connected ? '无新数据' : '设备未连接'}</span><span className="muted">{dirty ? '未保存 · 本地草稿' : '已保存'} · {state.processingMode === 'raw' ? '原始通道' : '处理后通道'}</span></div>

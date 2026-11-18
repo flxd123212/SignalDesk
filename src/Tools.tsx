@@ -62,24 +62,43 @@ export function Commands({ connected, notify }: { connected: boolean; notify: No
 }
 
 export function Script({ state, notify }: { state: AppState; notify: Notify }) {
-  const [script, setScript] = useState(() => localStorage.getItem('signaldesk.script') || '// signal-processing.js\n\nvoltage = ch1\ncurrent = ch2\nreference = ch3\npower = voltage * current\n');
-  const [error, setError] = useState(''), [dirty, setDirty] = useState(true);
+  const deviceId = state.activeDevice, root = state.devices?.find(device => device.id === deviceId)?.projectRoot || '';
+  const key = `signaldesk.script:${deviceId}:${root}`;
+  const [draft, setDraft] = useState(() => localStorage.getItem(key));
+  const [legacy] = useState(() => localStorage.getItem('signaldesk.script'));
+  const [applied, setApplied] = useState<string | null>(null), [error, setError] = useState('');
+  const script = draft ?? applied ?? '// signal-processing.js\n\nvoltage = ch1\ncurrent = ch2\nreference = ch3\npower = voltage * current\n';
+  const dirty = script !== applied;
+  useEffect(() => {
+    if (!deviceId) return;
+    let active = true;
+    const query = new URLSearchParams({ deviceId, root });
+    api<{ script: string | null }>(`/processing/script?${query}`).then(result => {
+      if (active) setApplied(result.script);
+    }).catch(error => { if (active) setError(error.message); });
+    return () => { active = false; };
+  }, [deviceId, root, state.processingRevision]);
+  const edit = (value: string) => {
+    if (value === script) return;
+    setDraft(value);
+    try { localStorage.setItem(key, value); } catch { setError('本地草稿保存失败，可使用导出公式保留修改'); }
+  };
   const apply = async () => {
-    try { await api('/processing', { mode: 'script', script }); localStorage.setItem('signaldesk.script', script); setDirty(false); setError(''); notify('公式已应用到实时数据'); }
+    try { await api('/processing', { deviceId, root, mode: 'script', script }); setApplied(script); setError(''); notify('公式已应用到实时数据'); }
     catch (failure) { setError((failure as Error).message); }
   };
   return <section className="script-page tool-panel"><div className="panel-toolbar"><div className="panel-title"><FileCode2 size={16} /><span>signal-processing.js</span>{dirty && <span className="modified-dot" />}</div><div className="toolbar-actions"><IconButton title="导出公式" onClick={() => download('signal-processing.js', script)}><Download size={16} /></IconButton><button className="primary compact-button" onClick={apply}>{!dirty && state.processingMode === 'script' ? <Check size={15} /> : <Play size={15} />}{!dirty && state.processingMode === 'script' ? '已应用' : '应用公式'}</button></div></div>
-    <div className="script-body"><Editor value={script} onChange={value => { setScript(value); setDirty(true); }} /><aside className="script-inspector"><div className="inspector-heading">输出通道</div><div className="mode-label">{state.processingMode === 'script' ? 'FORMULA / RUNNING' : 'FORMULA / IDLE'}</div>{state.names.map((name, index) => <div className="script-output" key={index}><span>{name}</span><b>{number(state.latest[index], 4)}</b></div>)}<div className="inspector-heading spaced">运行状态</div><div className="measurement-row"><span>处理错误</span><b>{state.processingErrors}</b></div><div className="measurement-row"><span>输入采样率</span><b>{state.config.sampleRate} Hz</b></div></aside></div>
+    <div className="script-body"><Editor value={script} onChange={edit} /><aside className="script-inspector">{legacy && draft === null && applied === null && <button className="quiet-button" onClick={() => edit(legacy)}>载入旧版公式</button>}<div className="inspector-heading">输出通道</div><div className="mode-label">{state.processingMode === 'script' ? 'FORMULA / RUNNING' : 'FORMULA / IDLE'}</div>{state.names.map((name, index) => <div className="script-output" key={index}><span>{name}</span><b>{number(state.latest[index], 4)}</b></div>)}<div className="inspector-heading spaced">运行状态</div><div className="measurement-row"><span>处理错误</span><b>{state.processingErrors}</b></div><div className="measurement-row"><span>输入采样率</span><b>{state.config.sampleRate} Hz</b></div></aside></div>
     <div className={`editor-status ${error ? 'error' : ''}`}>{error || `${dirty ? '未应用的修改' : '已保存'} · 数学表达式 · UTF-8`}</div></section>;
 }
 
-export function Instruments({ connected, notify }: { connected: boolean; notify: Notify }) {
+export function Instruments({ connected, deviceId, notify }: { connected: boolean; deviceId?: string; notify: Notify }) {
   const [slave, setSlave] = useState(1), [address, setAddress] = useState(0), [count, setCount] = useState(2), [func, setFunc] = useState(3);
   const [hex, setHex] = useState('01 03 00 00 00 02'), [crc, setCrc] = useState(''), [crcError, setCrcError] = useState('');
   const [scpi, setScpi] = useState('*IDN?');
   const frame = [slave, func, (address >> 8) & 255, address & 255, (count >> 8) & 255, count & 255].map(value => value.toString(16).padStart(2, '0').toUpperCase()).join(' ');
   useEffect(() => { let active = true; const timer = setTimeout(() => { api<{ hex: string }>('/crc', { text: hex }).then(result => { if (active) { setCrc(result.hex); setCrcError(''); } }).catch(error => { if (active) { setCrc(''); setCrcError(error.message); } }); }, 200); return () => { active = false; clearTimeout(timer); }; }, [hex]);
-  const send = async (text: string, format = 'text', checksum = 'none') => { try { await api('/send', { text, format, ending: format === 'hex' ? 'none' : 'lf', checksum }); notify('指令已发送'); } catch (error) { notify((error as Error).message, true); } };
+  const send = async (text: string, format = 'text', checksum = 'none') => { try { await api('/send', { deviceId, text, format, ending: format === 'hex' ? 'none' : 'lf', checksum }); notify('指令已发送'); } catch (error) { notify((error as Error).message, true); } };
   const valid = Number.isInteger(slave) && slave >= 1 && slave <= 247 && Number.isInteger(address) && address >= 0 && address <= 65535 && Number.isInteger(count) && count >= 1 && count <= 125 && address + count <= 65536;
   return <div className="instrument-page"><section className="instrument-section"><div className="section-heading"><Radio size={19} /><h2>Modbus RTU</h2><span className="small-tag">MASTER</span></div><div className="instrument-fields"><Field label="从站地址"><input type="number" min="1" max="247" value={slave} onChange={event => setSlave(Number(event.target.value))} /></Field><Field label="功能码"><select value={func} onChange={event => setFunc(Number(event.target.value))}><option value="3">03 · 保持寄存器</option><option value="4">04 · 输入寄存器</option></select></Field><Field label="起始地址"><input type="number" min="0" max="65535" value={address} onChange={event => setAddress(Number(event.target.value))} /></Field><Field label="寄存器数量"><input type="number" min="1" max="125" value={count} onChange={event => setCount(Number(event.target.value))} /></Field></div><div className="frame-preview"><code>{frame}</code><span>+ CRC16 / LE</span><button className="primary" disabled={!connected || !valid} onClick={() => send(frame, 'hex', 'modbus')}><Send size={15} />发送请求</button></div></section>
     <section className="instrument-section"><div className="section-heading"><Radio size={19} /><h2>SCPI 仪器指令</h2><span className="small-tag">SERIAL</span></div><div className="scpi-presets">{['*IDN?', '*OPC?', 'SYST:ERR?', 'MEAS:VOLT:DC?', 'MEAS:CURR:DC?'].map(value => <button key={value} className={scpi === value ? 'selected' : ''} onClick={() => setScpi(value)}><code>{value}</code></button>)}</div><div className="inline-command"><input aria-label="SCPI 指令" className="mono" value={scpi} onChange={event => setScpi(event.target.value)} /><button className="primary" disabled={!connected || !scpi} onClick={() => send(scpi)}><Send size={15} />发送</button></div></section>
@@ -93,8 +112,8 @@ export function Sessions({ state, notify }: { state: AppState; notify: Notify })
   const file = useRef<HTMLInputElement>(null);
   const refresh = () => api<Session[]>('/sessions').then(setSessions).catch(error => notify(error.message, true));
   useEffect(() => { void refresh(); }, [state.recording?.id]);
-  const control = async (action: string) => { try { await api('/replay/control', { action, speed }); } catch (error) { notify((error as Error).message, true); } };
-  const load = async (id: string) => { try { await api('/replay/load', { id }); notify('录制已载入，串口已断开'); } catch (error) { notify((error as Error).message, true); } };
+  const control = async (action: string) => { try { await api('/replay/control', { deviceId: state.activeDevice, action, speed }); } catch (error) { notify((error as Error).message, true); } };
+  const load = async (id: string) => { try { await api('/replay/load', { deviceId: state.activeDevice, id }); notify('录制已载入，串口已断开'); } catch (error) { notify((error as Error).message, true); } };
   const importFile = async (chosen: File) => { try { if (chosen.size > 32 * 1024 * 1024) throw new Error('录制文件不能超过 32 MiB'); await api('/sessions/import', { text: await chosen.text() }); await refresh(); notify('录制已导入'); } catch (error) { notify((error as Error).message, true); } };
   const replay = state.source === 'replay' ? state.replay : null;
   return <section className="session-page tool-panel"><div className="panel-toolbar"><div className="panel-title"><FolderOpen size={16} /><span>采集会话</span><span className="small-tag">JSONL</span></div><div className="toolbar-actions"><input hidden ref={file} type="file" accept=".jsonl" onChange={event => { if (event.target.files?.[0]) void importFile(event.target.files[0]); event.target.value = ''; }} /><IconButton title="刷新录制列表" onClick={refresh}><RefreshCw size={15} /></IconButton><button className="quiet-button" onClick={() => file.current?.click()}><ArrowUpFromLine size={15} />导入录制</button></div></div>

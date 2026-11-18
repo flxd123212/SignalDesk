@@ -24,7 +24,9 @@ export function SettingsHub({ device, initial = 'appearance', simple, setSimple,
   useEffect(() => { if (section !== 'ai') return; let active = true; setError(''); api<{ deviceId: string; sessionId: string; config: AIConfig }>('/ai/state').then(value => { if (!active) return; if (value.deviceId !== device.activeDevice) throw new Error('当前设备已切换，请重新打开设置'); setConfig(value.config); setSession(value.sessionId); }).catch(error => { if (active) setError(error.message); }); return () => { active = false; }; }, [section, device.activeDevice]);
   const update = (patch: Parameters<typeof setPreferences>[0]) => { if (!setPreferences(patch)) notify('设置已生效，但浏览器未允许保存偏好', true); };
   const open = (page: Page) => { close(); navigate(page); };
-  return <dialog ref={dialog} className="settings-hub" aria-label="设置" onCancel={close}>
+  return <dialog ref={dialog} className="settings-hub" aria-label="设置" onCancel={close} onKeyDown={event => {
+    if (event.key === 'Escape' && !event.defaultPrevented && !event.nativeEvent.isComposing && (event.target as HTMLElement).closest('dialog') === dialog.current) { event.preventDefault(); close(); }
+  }}>
     <header className="settings-hub-header"><Settings size={18} /><h2>设置</h2><span>{target?.name}</span><IconButton title="关闭设置" onClick={close}><X size={18} /></IconButton></header>
     <div className="settings-hub-body"><nav aria-label="设置分类">{sections.map(item => <button key={item.id} aria-current={section === item.id ? 'page' : undefined} onClick={() => setSection(item.id)}><item.icon size={16} />{item.label}</button>)}</nav>
       <div ref={contentSurface} className="settings-content"><h3>{sections.find(item => item.id === section)?.label}</h3>

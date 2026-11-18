@@ -102,11 +102,51 @@ export class FirmwareWorkspace {
     return { path: relative, content, hash: hash(bytes), bytes: bytes.length };
   }
 
-  async propose({ path: relative, expectedHash, content, reason }, { partialEdit = false } = {}) {
-    if (this.proposals.size >= 40) throw new Error('修改提案数量已达上限，请开启新会话');
+  async search(term, signal) {
+    if (typeof term !== 'string' || !term.trim() || term.length > 200) throw new Error('搜索内容必须为 1 - 200 个字符');
+    const needle = term.toLowerCase(), files = await this.list(), matches = [];
+    let remaining = 2 * 1024 * 1024, scannedFiles = 0, skippedFiles = 0;
+    for (const entry of files) {
+      if (signal?.aborted) throw new Error('分析已停止');
+      if (matches.length === 60) break;
+      if (entry.bytes > remaining) { skippedFiles++; continue; }
+      try {
+        const file = await this.read(entry.path);
+        remaining -= file.bytes; scannedFiles++;
+        for (const [index, line] of file.content.split(/\r?\n/).entries()) {
+          const at = line.toLowerCase().indexOf(needle);
+          if (at < 0) continue;
+          const start = Math.max(0, at - 50);
+          matches.push({ path: file.path, line: index + 1, text: line.slice(start, start + 300) });
+          if (matches.length === 60) break;
+        }
+      } catch { skippedFiles++; }
+    }
+    return { matches, scannedFiles, skippedFiles, truncated: !!skippedFiles || files.length >= 300 || matches.length === 60 };
+  }
+
+  async newPath(relative, makeParents) {
+    if (typeof relative !== 'string' || relative.length > 400 || !allowed.has(path.extname(relative).toLowerCase())) throw new Error('新文件必须是支持的工程源码');
+    const parts = relative.split(/[\\/]/);
+    if (parts.some(p => !p || p.startsWith('.') || /[<>:"|?*\x00-\x1f]|[. ]$/.test(p) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(p) || excluded.has(p.toLowerCase()))) throw new Error('新文件路径无效');
+    let directory = await fs.realpath(this.root);
+    for (const part of parts.slice(0, -1)) {
+      directory = path.join(directory, part);
+      if (makeParents) await fs.mkdir(directory).catch(e => { if (e.code !== 'EEXIST') throw e; });
+      const st = await fs.lstat(directory).catch(e => { if (e.code !== 'ENOENT') throw e; });
+      if (st && (!st.isDirectory() || st.isSymbolicLink())) throw new Error('新文件父目录不能是链接');
+    }
+    const target = path.join(directory, parts.at(-1));
+    if (await fs.lstat(target).catch(e => { if (e.code !== 'ENOENT') throw e; })) throw new Error('新文件已存在，不覆盖');
+    return target;
+  }
+
+  async propose({ path: relative, expectedHash, content, reason }, { partialEdit = false, create = false } = {}) {
+    if (this.proposals.size >= 40) { const done = [...this.proposals.values()].find(p => !['pending', 'applying'].includes(p.status)); if (done) this.proposals.delete(done.id); else throw new Error('未处理的修改提案数量已达上限'); }
     const limit = partialEdit ? MAX_SOURCE_BYTES : MAX_REPLACEMENT_BYTES;
     if (typeof content !== 'string' || Buffer.byteLength(content) > limit || typeof reason !== 'string') throw new Error(partialEdit ? '局部补丁结果不能超过 8 MiB' : '整文件替换最多 96 KiB，大文件请使用 propose_source_patch');
-    const before = await this.read(relative);
+    if (create) { await this.newPath(relative, false); expectedHash = null; }
+    const before = create ? { content: '', bytes: 0, hash: null } : await this.read(relative);
     if (expectedHash !== before.hash) throw new Error('文件已经变化，请重新读取后生成提案');
     if (!partialEdit && before.bytes > MAX_REPLACEMENT_BYTES) throw new Error('大文件不能整文件替换，请使用 propose_source_patch 保留无关代码');
     const normalized = before.content.includes('\r\n') ? content.replace(/\r?\n/g, '\r\n') : content.replace(/\r\n/g, '\n');
@@ -128,6 +168,11 @@ export class FirmwareWorkspace {
     if (!proposal || proposal.status !== 'pending' || proposal.root !== this.root) throw new Error('修改提案已失效');
     proposal.status = 'applying';
     try {
+    if (proposal.expectedHash === null) {
+      const filename = await this.newPath(proposal.path, true);
+      await fs.writeFile(filename, proposal.content, { flag: 'wx' });
+      proposal.status = 'applied'; proposal.appliedAt = new Date().toISOString(); await this.persist(proposal); return proposal;
+    }
     const filename = await this.resolve(proposal.path), before = await fs.readFile(filename);
     if (hash(before) !== proposal.expectedHash) throw new Error('文件在提案后已被修改，未覆盖新内容');
     const backupRoot = path.join(this.root, '.signaldesk-backups', proposal.id);

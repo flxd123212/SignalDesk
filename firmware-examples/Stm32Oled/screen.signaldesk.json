@@ -1,0 +1,64 @@
+{
+  "version": 1,
+  "profile": "oled96",
+  "codec": "auto",
+  "threshold": 115,
+  "address": "0x3C",
+  "cs": 5,
+  "dc": 16,
+  "rst": -1,
+  "touch": "none",
+  "touchCs": 4,
+  "pages": [
+    {
+      "name": "OLED 1",
+      "bg": "#000000",
+      "layers": [
+        {
+          "id": "page-switch",
+          "type": "hotspot",
+          "x": 0,
+          "y": 0,
+          "w": 100,
+          "h": 100,
+          "ink": "#ffffff",
+          "color": "#000000",
+          "value": 0,
+          "text": "PA0",
+          "target": 1
+        }
+      ],
+      "frames": [
+        {
+          "png": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAABACAAAAAD3vSCjAAAAXklEQVR4nO3ZoQ3AMBAEweu/6QSngeyDWWiTkU4y8Z64AQAA9IClAQAAAHxfws/NT+cAAAcAS7sAyCcAAMgBS7sAyCcAAMgBS7sAyCcAAMgBSwMAAAC48GEBAAAQ9wI5AIJDIprkpwAAAABJRU5ErkJggg==",
+          "ms": 1000
+        }
+      ]
+    },
+    {
+      "name": "OLED 2",
+      "bg": "#000000",
+      "layers": [
+        {
+          "id": "page-switch",
+          "type": "hotspot",
+          "x": 0,
+          "y": 0,
+          "w": 100,
+          "h": 100,
+          "ink": "#ffffff",
+          "color": "#000000",
+          "value": 0,
+          "text": "PA0",
+          "target": 0
+        }
+      ],
+      "frames": [
+        {
+          "png": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAABACAAAAAD3vSCjAAAAW0lEQVR4nO3ZsQ0AIAwEsey/NNQswKXwlVSWXkrDnLgBAADoAZMGAAAA8AKeC/XnHQBgGSBoGSCfAAAgBwQtA+QTAADkgKBlgHwCAIAcEAQAAACw4cMCAAAg7gJYoPLEW6ry8AAAAABJRU5ErkJggg==",
+          "ms": 1000
+        }
+      ]
+    }
+  ]
+}

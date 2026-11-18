@@ -21,7 +21,7 @@ export function Connection({ state, online, notify }: { state: AppState; online:
   };
   const signal = async (key: 'dtr' | 'rts', value: boolean) => {
     if (!state.connected) { update({ [key]: value }); return; }
-    try { await api('/signals', { dtr: state.config.dtr, rts: state.config.rts, [key]: value }); }
+    try { await api('/signals', { deviceId: state.activeDevice, dtr: state.config.dtr, rts: state.config.rts, [key]: value }); }
     catch (error) { notify((error as Error).message, true); }
   };
   const locked = state.connected || loading || state.busy;

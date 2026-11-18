@@ -44,8 +44,7 @@ export function canonicalToolCall(name, args) {
 
 export function resumeRequest(value) {
   if (!value || value.mode !== 'ai' || typeof value.message !== 'string' || !value.message.trim() || value.message.length > 8000
-    || typeof value.selectedFile !== 'string' || value.selectedFile.length > 1000 || !['review', 'propose'].includes(value.agentMode)
-    || !Number.isInteger(value.maxSteps) || value.maxSteps < 2 || value.maxSteps > 20 || value.continuous) return null;
+    || typeof value.selectedFile !== 'string' || value.selectedFile.length > 1000 || !['review', 'propose', 'project'].includes(value.agentMode) || value.continuous) return null;
   return { message: value.message, mode: 'ai', selectedFile: value.selectedFile, includeLogs: value.includeLogs === true,
-    continuous: false, agentMode: value.agentMode, maxSteps: value.maxSteps };
+    continuous: false, agentMode: value.agentMode };
 }

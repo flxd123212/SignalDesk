@@ -7,5 +7,5 @@
 - ARM 样例：`arm-none-eabi-gcc`，Cortex-M4、Thumb、soft float。
 - RISC-V 样例：`riscv32-unknown-elf-gcc`，RV32IMAC、ILP32。
 - 所有样例使用 `-Wall -Wextra -Werror -Wconversion`。
-- ELF 的入口为 `probe`，链接地址只是测试值，没有复位向量、内存布局、时钟、看门狗或驱动。不能据此证明开发板能够运行。
+- ELF 入口为 `probe`。`probe.ld` 使用示例分区（64 KiB Flash、16 KiB RAM），可在编译后按 `Shift+F8` 查看链接占用。移植到开发板时需使用板级内存布局和启动文件。
 - 实际工程应使用对应芯片的启动文件、链接脚本、SDK/HAL 和 CPU/ABI 配置；支持 ESP32 的工程优先使用 ESP-IDF 或 PlatformIO。

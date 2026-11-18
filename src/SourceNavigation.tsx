@@ -8,6 +8,37 @@ import { api } from './data';
 import { IconButton } from './ui';
 
 export type OutlineItem = { name: string; line: number; kind: 'function' | 'type' };
+type SearchReport = { matches: { path: string; line: number; text: string }[]; scannedFiles: number; skippedFiles: number; truncated: boolean };
+
+export function ProjectSearch({ deviceId, root, open, close }: { deviceId: string; root: string; open: (file: string, line: number) => void; close: () => void }) {
+  const dialog = useRef<HTMLDialogElement>(null), sequence = useRef(0);
+  const [query, setQuery] = useState(''), [result, setResult] = useState<SearchReport | null>(null), [error, setError] = useState(''), [busy, setBusy] = useState(false);
+  useEffect(() => {
+    const element = dialog.current, previous = document.activeElement;
+    element?.showModal();
+    return () => { sequence.current++; element?.close(); if (previous instanceof HTMLElement && previous.isConnected) previous.focus(); };
+  }, []);
+  const search = async () => {
+    if (!query.trim() || busy) return;
+    const id = ++sequence.current;
+    setBusy(true); setError(''); setResult(null);
+    try {
+      const report = await api<SearchReport>('/project/search', { deviceId, root, query });
+      if (id === sequence.current) setResult(report);
+    } catch (e) { if (id === sequence.current) setError((e as Error).message); }
+    finally { if (id === sequence.current) setBusy(false); }
+  };
+  return <dialog className="command-palette" ref={dialog} aria-label="查找工程正文" onCancel={close}>
+    <form className="palette-search" onSubmit={event => { event.preventDefault(); void search(); }}>
+      <Search size={18}/><input autoFocus aria-label="工程正文关键词" placeholder="查找工程正文" maxLength={200} value={query} onChange={event => { sequence.current++; setQuery(event.target.value); setResult(null); setError(''); setBusy(false); }}/>
+      <button className="quiet-button" disabled={busy || !query.trim()} type="submit">查找</button><IconButton title="关闭工程搜索" onClick={close}><X size={16}/></IconButton>
+    </form>
+    <div className="palette-results" aria-label="工程正文结果">
+      {result?.matches.map(match => <button key={`${match.path}:${match.line}`} onClick={() => { open(match.path, match.line); close(); }}><FileCode2 size={16}/><span>{match.path}:{match.line}<small>{match.text}</small></span></button>)}
+      <p className="palette-empty" role="status">{busy ? '正在搜索工程…' : error || (result ? `匹配 ${result.matches.length} 行，已搜索 ${result.scannedFiles} 个文件${result.truncated ? `（部分结果，跳过 ${result.skippedFiles} 个文件或已达到扫描上限）` : ''}` : '')}</p>
+    </div>
+  </dialog>;
+}
 export function sourceOutline(file: string, content: string): OutlineItem[] {
   const language = /\.(?:c|h|cc|cpp|cxx|hpp|ino)$/i.test(file) ? cppLanguage : /\.[cm]?jsx?$/i.test(file) ? javascriptLanguage : /\.tsx?$/i.test(file) ? typescriptLanguage : /\.pyi?$/i.test(file) ? pythonLanguage : /\.rs$/i.test(file) ? rustLanguage : null;
   if (!language || !content) return [];

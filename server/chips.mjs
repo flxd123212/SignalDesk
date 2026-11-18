@@ -3,6 +3,7 @@ import { spawn } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash, randomUUID } from 'node:crypto';
+import { bootCheck, flashVerification, validateHandshake } from './firmware-check.mjs';
 import { keilPlan, readKeilProject, findKeilExecutable, keilArtifact } from './keil.mjs';
 import { toolDirectories, executableNames, isExecutable, portPathKey, toolEnvironment, stopProcessTree } from './platform.mjs';
 
@@ -82,6 +83,7 @@ export class ChipService extends EventEmitter {
     throw new Error(`未找到 ${basename}，请安装官方工具或指定可执行文件绝对路径`);
   }
   async prepare(input) {
+    const deviceId=this.hub.activeId, device=this.hub.devices.get(deviceId), boundRoot=device?.projectRoot;
     if (input.family === 'keil') {
       const root = this.hub.devices.get(this.hub.activeId).projectRoot;
       const project = await readKeilProject(root, input.keilProject);
@@ -97,15 +99,18 @@ export class ChipService extends EventEmitter {
     const id = randomUUID(), createdAt = Date.now();
     for (const [key, value] of this.plans) if (createdAt - value.createdAt > 300000) this.plans.delete(key);
     if (this.plans.size >= 20) this.plans.delete(this.plans.keys().next().value);
-    const proposal = { ...plan, id, createdAt, executable, images, family: input.family, chip: input.chip || 'STM32' };
+    if(this.hub.activeId!==deviceId||device?.projectRoot!==boundRoot)throw new Error('目标设备或工程已变化');
+    const proposal = { ...plan, id, createdAt, executable, images, deviceId, root:boundRoot, handshake:validateHandshake(input.handshake,device,plan.target), family: input.family, chip: input.chip || 'STM32' };
     this.plans.set(id, proposal); return proposal;
   }
   async execute({ id, confirmation }) {
-    if (this.child || this.preparing) throw new Error('已有烧录任务');
+    if (this.child || this.preparing || this.handshaking) throw new Error('已有烧录或握手任务');
     const plan = this.plans.get(id);
     if (!plan || Date.now() - plan.createdAt > 300000 || confirmation !== plan.confirmation) throw new Error('烧录确认不匹配或预览已过期');
     this.preparing = true;
     try {
+      const bound=this.hub.devices.get(plan.deviceId);
+      if(plan.deviceId && (this.hub.activeId!==plan.deviceId || !bound || bound.projectRoot!==plan.root || bound.engine.soakId))throw new Error('目标绑定已变化或正在测试');
       if (plan.family === 'keil') {
         const device = this.hub.devices.get(plan.deviceId);
         if (!device || device.projectRoot !== plan.root || device.engine.connected || device.engine.busy || device.engine.automationLock) throw new Error('请保持原工程绑定并断开目标设备后烧录');
@@ -121,12 +126,24 @@ export class ChipService extends EventEmitter {
       if (plan.target !== 'SWD') this.hub.reserved.add(portPathKey(plan.target));
       this.plans.delete(id);
       this.job = { id, status: 'running', target: plan.target, command: [plan.executable, ...plan.args].map(part => JSON.stringify(part)).join(' '), output: '', startedAt: new Date().toISOString(), exitCode: null };
+      if(bound)bound.runningFirmware=null;
+      this.job.evidence={deviceId:plan.deviceId,root:plan.root,build:plan.build||null,images:plan.images.map(({name,address,sha256,version})=>({name,address,sha256,version})),verification:'pending',runtime:plan.handshake?'pending':'disabled',expected:plan.handshake?.expected};
       const child = this.child = this.spawnProcess(plan.executable, plan.args, { shell: false, windowsHide: true, detached: process.platform !== 'win32', env: toolEnvironment(), stdio: ['ignore', 'pipe', 'pipe'] });
       const append = value => { this.job.output = (this.job.output + value.toString()).slice(-48000); this.emit('update'); };
       child.stdout.on('data', append); child.stderr.on('data', append);
       const timeout = setTimeout(() => { append('\n烧录超过 5 分钟，任务已停止。'); this.stop(); }, 300000);
       child.once('error', error => { append(error.message); this.job.status = 'failed'; });
-      child.once('close', async code => { clearTimeout(timeout); if (plan.logFile) { try { append((await fs.readFile(plan.logFile)).subarray(-24000)); } catch { append('\nKeil 未生成下载日志。'); } } this.child = null; if (plan.deviceId && this.hub.devices.has(plan.deviceId)) this.hub.devices.get(plan.deviceId).engine.flashLock = false; this.hub.reserved.delete(portPathKey(plan.target)); this.job.exitCode = code; if (this.job.status !== 'cancelled') this.job.status = code === 0 || (plan.family === 'keil' && code === 1) ? 'succeeded' : 'failed'; this.emit('update'); });
+      child.once('close', async code => {
+        clearTimeout(timeout);
+        if(plan.logFile){try{append((await fs.readFile(plan.logFile)).subarray(-24000));}catch{append('\nKeil 未生成下载日志。');}}
+        this.child=null;if(bound && plan.family==='keil')bound.engine.flashLock=false;
+        this.hub.reserved.delete(portPathKey(plan.target));this.job.exitCode=code;
+        if(this.job.status==='running')this.job.status=(code===0||(plan.family==='keil'&&code===1))?'succeeded':'failed';
+        const ok=this.job.status==='succeeded';this.job.evidence.verification=flashVerification(plan.family,this.job.output,plan.images.length,ok);
+        if(plan.handshake && ok){this.handshaking=bootCheck(this.hub,plan,this.job);await this.handshaking;this.handshaking=null;}
+        else if(plan.handshake)this.job.evidence.runtime='skipped';
+        this.emit('update');
+      });
       this.emit('update'); return this.job;
     } catch (error) { if (!this.child) { this.hub.reserved.delete(portPathKey(plan.target)); if (plan.deviceId && this.hub.devices.has(plan.deviceId)) this.hub.devices.get(plan.deviceId).engine.flashLock = false; } throw error; }
     finally { this.preparing = false; }

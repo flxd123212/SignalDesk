@@ -19,7 +19,19 @@ export function displayStore(directory, hub) {
       await fs.writeFile(path.join(root, 'SignalDeskUI.ino'), data.code, { flag: 'wx' });
       return { root };
     },
-    async load(scope) { try { return sceneSchema.parse(JSON.parse(await fs.readFile(filename(scope), 'utf8'))); } catch (e) { if (e.code === 'ENOENT') return null; throw e; } },
+    async load(scope) {
+      const saved = filename(scope);
+      try { return sceneSchema.parse(JSON.parse(await fs.readFile(saved, 'utf8'))); }
+      catch (e) { if (e.code !== 'ENOENT') throw e; }
+      if (!scope.root) return null;
+      const candidate = path.join(scope.root, 'screen.signaldesk.json');
+      try {
+        const stat = await fs.lstat(candidate);
+        if (!stat.isFile() || stat.size > 10 * 1024 * 1024) throw new Error('工程屏幕文件无效或过大');
+        const scene = sceneSchema.parse(JSON.parse(await fs.readFile(candidate,'utf8')));
+        filename(scope); return scene;
+      } catch (e) { if(e.code==='ENOENT')return null;throw e; }
+    },
     async save(data) {
       const dest = filename(data), checked = sceneSchema.parse(data.scene), tmp = `${dest}.${randomUUID()}.tmp`;
       await fs.mkdir(directory, { recursive: true });

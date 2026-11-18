@@ -30,5 +30,29 @@ export function validationResult(job) {
   if (job.status === 'succeeded' && kind === 'configure' && job.validation?.label === 'GCC 配置') summary = 'GCC 交叉工具链配置完成；可以开始编译';
   if (sourceState === 'changed') summary += '；源码已变化，需要重新验证';
   if (sourceState === 'unavailable') summary += '；未能复核源码版本';
-  return { ...job, summary, tests, elapsedMs: Math.max(0, (job.finishedAt ? Date.parse(job.finishedAt) : Date.now()) - Date.parse(job.startedAt)), diagnostics: job.diagnostics || [] };
+  const memoryRegions = ['build', 'test-build'].includes(kind) ? parseMemoryUsage(job.output) : [];
+  return { ...job, summary, tests, memoryRegions, elapsedMs: Math.max(0, (job.finishedAt ? Date.parse(job.finishedAt) : Date.now()) - Date.parse(job.startedAt)), diagnostics: job.diagnostics || [] };
+}
+
+export function parseMemoryUsage(output) {
+  const regions = [], scale = { B: 1, KB: 1024, MB: 1024 ** 2, GB: 1024 ** 3 };
+  const bytes = (value, unit = 'B') => Number(value.replaceAll(',', '')) * scale[unit.toUpperCase()];
+  function add(source, region, used, capacity) {
+    if (Number.isSafeInteger(used) && Number.isSafeInteger(capacity) && capacity > 0) regions.push({ source, region, used, capacity });
+  }
+  let linkerTable = false;
+  for (const line of String(output).replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').split(/\r?\n/)) {
+    if (regions.length >= 128) break;
+    if (/^\s*Memory region\s+Used Size\s+Region Size\s+%age Used\s*$/i.test(line)) { linkerTable = true; continue; }
+    if (linkerTable) {
+      const row = /^\s*([^:\s][^:]{0,79}):\s+(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)\s+(\d+(?:\.\d+)?)\s*(B|KB|MB|GB)\s+[\d.]+%\s*$/i.exec(line);
+      if (row) { add('GNU ld', row[1].trim(), bytes(row[2], row[3]), bytes(row[4], row[5])); continue; }
+      linkerTable = false;
+    }
+    const pio = /^\s*(RAM|Flash):\s*\[.*?\]\s*[\d.]+%\s*\(used ([\d,]+) bytes from ([\d,]+) bytes\)\s*$/i.exec(line);
+    if (pio) { add('PlatformIO', pio[1], bytes(pio[2]), bytes(pio[3])); continue; }
+    const arduino = /^\s*(Sketch uses|Global variables use) ([\d,]+) bytes\s+\([^)]*%\).*?Maximum is ([\d,]+) bytes\.?\s*$/i.exec(line);
+    if (arduino) add('Arduino', /^Sketch/i.test(arduino[1]) ? 'Flash' : 'RAM', bytes(arduino[2]), bytes(arduino[3]));
+  }
+  return regions;
 }

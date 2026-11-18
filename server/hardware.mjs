@@ -64,7 +64,7 @@ export class HardwareStore {
     const key = this.key(root, deviceId), previous = this.queues.get(key) || Promise.resolve();
     const operation = previous.catch(() => {}).then(async () => {
       const current = await this.load(root, deviceId);
-      if (current.version !== expectedVersion) throw new Error('硬件配置已在其他窗口修改，请刷新后再保存');
+      if (current.version !== expectedVersion) throw Object.assign(new Error('硬件配置已在其他窗口修改，请刷新后再保存'), { status: 409 });
       const next = { ...current, ...patch, version: current.version + 1, updatedAt: new Date().toISOString() };
       await fs.mkdir(this.directory, { recursive: true }); const target = path.join(this.directory, key + '.json'), temporary = `${target}.${randomUUID()}.tmp`;
       await fs.writeFile(temporary, JSON.stringify(next)); await fs.rename(temporary, target); return next;

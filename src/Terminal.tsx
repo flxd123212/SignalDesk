@@ -4,6 +4,8 @@ import { dataStore, download, downloadPacketBytes, useDataRevision } from './dat
 import { Empty, IconButton } from './ui';
 import type { Packet } from './types';
 import { findPacketMatches } from './terminal-search.mjs';
+import { Bug } from 'lucide-react';
+import { recentCrashLog } from '../shared/crash-trace.mjs';
 
 function Highlight({ text, ranges = [] }: { text: string; ranges?: number[][] }) {
   const parts = []; let last = 0;
@@ -11,7 +13,7 @@ function Highlight({ text, ranges = [] }: { text: string; ranges?: number[][] })
   parts.push(text.slice(last)); return <>{parts}</>;
 }
 
-export function Terminal({ compact = false, collapsed = false, onToggle }: { compact?: boolean; collapsed?: boolean; onToggle?: () => void }) {
+export function Terminal({ compact = false, collapsed = false, onToggle, onTrace }: { compact?: boolean; collapsed?: boolean; onToggle?: () => void; onTrace?: (snapshot: string) => void }) {
   const revision = useDataRevision();
   const [hex, setHex] = useState(false), [filter, setFilter] = useState(''), [direction, setDirection] = useState('all');
   const [follow, setFollow] = useState(true), [paused, setPaused] = useState(false);
@@ -31,6 +33,7 @@ export function Terminal({ compact = false, collapsed = false, onToggle }: { com
   return <section className={`terminal-panel tool-panel ${compact ? 'compact' : 'full-terminal'} ${collapsed ? 'is-collapsed' : ''}`}>
     <div className="panel-toolbar"><div className="panel-title"><TerminalSquare size={15} /><span>串口终端</span><span className="small-tag">RAW DATA</span></div>
       <div className="toolbar-actions">
+        {onTrace && <IconButton title="崩溃回溯 (F9)" onClick={() => onTrace(recentCrashLog(cached))}><Bug size={15} /></IconButton>}
         <div className="segmented small"><button className={!hex ? 'active' : ''} onClick={() => setHex(false)}>TEXT</button><button className={hex ? 'active' : ''} onClick={() => setHex(true)}>HEX</button></div>
         {!compact && <select aria-label="收发方向" value={direction} onChange={event => setDirection(event.target.value)}><option value="all">收发全部</option><option value="RX">仅接收</option><option value="TX">仅发送</option></select>}
         <IconButton title={paused ? '恢复终端刷新' : '暂停终端刷新'} className={paused ? 'selected' : ''} onClick={togglePause}>{paused ? <Play size={15} /> : <Pause size={15} />}</IconButton>

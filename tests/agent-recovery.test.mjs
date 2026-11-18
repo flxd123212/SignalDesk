@@ -19,17 +19,17 @@ async function fixture(t, provider) {
   return agent;
 }
 
-test('budget exhaustion pauses without further model calls; manual continuation keeps tool evidence and the original task', async t => {
+test('provider interruption retains tool evidence and read-only policy on manual continuation', async t => {
   let count = 0;
   const agent = await fixture(t, async ({ messages, tools }) => {
     count++;
     if (count === 1) return { content: '', toolCalls: [call('read-1', 'read_firmware_file', { path: 'main.c' })] };
-    if (count === 2) { assert.deepEqual(tools, []); return answer; }
+    if (count === 2) throw new Error('fixture disconnect');
     assert.ok(tools.length); assert.ok(messages.some(message => message.role === 'tool' && message.tool_call_id === 'read-1'));
     assert.match(messages.at(-1).content, /原任务：Review timing/); return answer;
   });
-  await agent.run({ mode: 'ai', message: 'Review timing', maxSteps: 2, agentMode: 'review' });
-  assert.equal(count, 2); assert.equal(agent.state().progress.phase, 'paused'); assert.equal(agent.state().canResume, true);
+  await assert.rejects(agent.run({ mode: 'ai', message: 'Review timing', maxSteps: 2, agentMode: 'review' }), /disconnect/);
+  assert.equal(count, 2); assert.equal(agent.state().progress.phase, 'error'); assert.equal(agent.state().canResume, true);
   await agent.resume({ maxSteps: 4, agentMode: 'propose' });
   assert.equal(agent.lastRequest.agentMode, 'review'); assert.equal(count, 3); assert.equal(agent.state().canResume, false);
   assert.equal(agent.progress.phase, 'complete'); assert.equal(agent.engine.txBytes, 0);

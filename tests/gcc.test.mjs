@@ -43,6 +43,8 @@ test('installed RISC-V GCC produces a real ELF and MAP through the validation AP
     let job = await run('configure'); assert.equal(job.status, 'succeeded', job.output);
     job = await run('build'); assert.equal(job.status, 'succeeded', job.output);
     assert.equal(job.validation.sourceState, 'unchanged');
+    assert.deepEqual(job.memoryRegions.map(({ region, capacity }) => [region, capacity]), [['FLASH', 65536], ['RAM', 16384]]);
+    assert.ok(job.memoryRegions.every(item => item.used > 0 && item.used < item.capacity));
     const elf = job.artifacts.find(item => item.path.endsWith('.elf')); assert.match(elf.architecture, /RISC-V.*32 bit/);
     const bytes = await fs.readFile(path.join(root, elf.path)); assert.equal(bytes.readUInt16LE(18), 243); assert.equal(bytes.readUInt16LE(16), 2);
     assert.ok(job.artifacts.some(item => item.path.endsWith('.map')));

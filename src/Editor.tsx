@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Compartment, EditorState } from '@codemirror/state';
-import { EditorView, keymap, lineNumbers, highlightActiveLine } from '@codemirror/view';
+import { EditorView, keymap, lineNumbers, highlightActiveLine, Decoration } from '@codemirror/view';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { languages, type LanguageId } from './languages';
 import { HighlightStyle, foldGutter, foldKeymap, syntaxHighlighting } from '@codemirror/language';
@@ -24,19 +24,22 @@ const sourceColors = HighlightStyle.define([
 export function Editor({ value, onChange, readOnly = false, plain = false, line = 0, language, onCursor }: { value: string; onChange: (value: string) => void; readOnly?: boolean; plain?: boolean; line?: number; language?: LanguageId; onCursor?: (line: number, column: number) => void }) {
   const container = useRef<HTMLDivElement>(null), view = useRef<EditorView | null>(null), change = useRef(onChange);
   const preferences = usePreferences(), wrapping = useRef(new Compartment());
+  const diagnostics = useRef(new Compartment());
   const cursor = useRef(onCursor); cursor.current = onCursor;
   change.current = onChange;
   useEffect(() => {
     if (!container.current) return;
     view.current = new EditorView({ parent: container.current, state: EditorState.create({ doc: value, extensions: [
-      lineNumbers(), history(), languages[language || (plain ? 'text' : 'javascript')].extension(), syntaxHighlighting(sourceColors), foldGutter(), keymap.of(foldKeymap), highlightActiveLine(), keymap.of([...defaultKeymap, ...historyKeymap]), wrapping.current.of(preferences.editorWrap ? EditorView.lineWrapping : []),
-      EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly), EditorView.contentAttributes.of({ 'aria-label': readOnly ? '项目源码内容' : '代码编辑器', ...(readOnly ? { tabindex: '0' } : {}) }),
+      lineNumbers({domEventHandlers:{dblclick:(v,block)=>{const section=container.current?.closest<HTMLElement>('[data-probe-file]');if(!section?.dataset.probeFile)return false;window.dispatchEvent(new CustomEvent('signaldesk-lab',{detail:{kind:'probe',path:section.dataset.probeFile,line:v.state.doc.lineAt(block.from).number}}));return true;}}}), history(), languages[language || (plain ? 'text' : 'javascript')].extension(), syntaxHighlighting(sourceColors), foldGutter(), keymap.of(foldKeymap), highlightActiveLine(), keymap.of([...defaultKeymap, ...historyKeymap]), wrapping.current.of(preferences.editorWrap ? EditorView.lineWrapping : []),
+      diagnostics.current.of([]), EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly), EditorView.contentAttributes.of({ 'aria-label': readOnly ? '项目源码内容' : '代码编辑器', ...(readOnly ? { tabindex: '0' } : {}) }),
       EditorView.updateListener.of(update => { if (update.docChanged) change.current(update.state.doc.toString()); if (update.selectionSet || update.docChanged) { const position = update.state.selection.main.head, current = update.state.doc.lineAt(position); cursor.current?.(current.number, position - current.from + 1); } }),
       EditorView.theme({ '&': { height: '100%', fontSize: '14px', backgroundColor: '#191c20', color: '#cbd4d5' }, '.cm-content': { fontFamily: 'Consolas, monospace', padding: '20px 0' }, '.cm-line': { paddingLeft: '12px', lineHeight: '1.9' }, '.cm-gutters': { backgroundColor: '#191c20', color: '#5e6872', border: 'none', paddingTop: '20px' }, '.cm-activeLine': { backgroundColor: '#22282b' }, '.cm-cursor': { borderLeftColor: '#64d9b4' }, '&.cm-focused .cm-selectionBackground, .cm-selectionBackground': { backgroundColor: '#31534a' } }, { dark: true }),
     ] }) });
     return () => { view.current?.destroy(); view.current = null; };
   }, [readOnly, plain, language]);
   useEffect(() => { view.current?.dispatch({ effects: wrapping.current.reconfigure(preferences.editorWrap ? EditorView.lineWrapping : []) }); }, [preferences.editorWrap]);
+  useEffect(()=>{if(!readOnly)return;const receive=(event:Event)=>{const section=container.current?.closest<HTMLElement>('[data-probe-file]'),editor=view.current,data=(event as CustomEvent).detail;if(!editor||!section||section.dataset.probeFile!==data.file||section.dataset.sourceHash!==data.hash)return;
+    const marks=data.items.filter((d:{line:number})=>d.line>=1&&d.line<=editor.state.doc.lines).map((d:{line:number;text:string})=>Decoration.line({attributes:{class:'source-diagnostic-line',title:d.text}}).range(editor.state.doc.line(d.line).from));editor.dispatch({effects:diagnostics.current.reconfigure(EditorView.decorations.of(Decoration.set(marks,true)))});};window.addEventListener('signaldesk-source-diagnostics',receive);return()=>window.removeEventListener('signaldesk-source-diagnostics',receive);},[readOnly]);
   useEffect(() => {
     const editor = view.current;
     if (editor && editor.state.doc.toString() !== value) editor.dispatch({ changes: { from: 0, to: editor.state.doc.length, insert: value } });

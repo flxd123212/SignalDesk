@@ -77,11 +77,17 @@ try {
   await window.getByRole('button', { name: '分析数据', exact: true }).click();
   await window.waitForFunction(() => document.querySelector('[aria-label="Agent 运行状态"]')?.textContent?.includes('本地检查完成'));
   assert.equal((await call('/ai/state')).progress.phase, 'complete');
-  let budgetMode = false, budgetCalls = 0;
+  let planMode = false, planCalls = 0;
   const modelServer = http.createServer((request, response) => {
     request.resume(); request.on('end', () => {
       response.setHeader('Content-Type', 'application/json'); response.setHeader('x-request-id', 'package-trace');
-      const message = budgetMode && ++budgetCalls === 1 ? { tool_calls: [{ id: 'package-overview', type: 'function', function: { name: 'get_project_overview', arguments: '{}' } }] } : { content: '调用来源测试完成。此回复来自本机测试接口。' };
+      const message = planMode && ++planCalls === 1 ? {
+        tool_calls: [{
+          id: 'package-plan',
+          type: 'function',
+          function: { name: 'update_task_plan', arguments: JSON.stringify({ steps: [{ title: 'Review source after restart', status: 'pending' }] }) },
+        }],
+      } : { content: '调用来源测试完成。此回复来自本机测试接口。' };
       response.end(JSON.stringify({ model: 'package-resolved', id: 'package-response', choices: [{ message, finish_reason: message.tool_calls ? 'tool_calls' : 'stop' }], usage: { prompt_tokens: 10, completion_tokens: 6 } }));
     });
   });
@@ -95,9 +101,9 @@ try {
     assert.match(await details.innerText(), /package-trace/);
     await window.screenshot({ path: path.resolve('artifacts/packaged-agent-call-record.png') });
     const reset = await call('/ai/context/reset', { sessionId: result.sessionId }); assert.equal(reset.context.turns, 0); assert.ok(reset.messages.some(message => message.provenance?.reportedModel === 'package-resolved'));
-    budgetMode = true;
-    const paused = await call('/ai/run', { mode: 'ai', message: 'Package budget fixture', maxSteps: 2, agentMode: 'review' });
-    assert.equal(paused.progress.phase, 'paused'); assert.equal(paused.canResume, true); assert.equal(budgetCalls, 2);
+    planMode = true;
+    const paused = await call('/ai/run', { mode: 'ai', message: 'Package unfinished plan fixture', agentMode: 'review' });
+    assert.equal(paused.progress.phase, 'paused'); assert.equal(paused.canResume, true); assert.equal(planCalls, 2);
     await window.getByRole('button', { name: '继续任务', exact: true }).waitFor();
     await window.screenshot({ path: path.resolve('artifacts/packaged-agent-paused.png') });
   } finally { modelServer.closeAllConnections(); await new Promise(resolve => modelServer.close(resolve)); }

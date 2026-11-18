@@ -10,11 +10,22 @@ import { Logs } from './ProjectTools';
 import { ValidationPanel } from './ValidationPanel';
 import type { ValidationRequest } from './ValidationPanel';
 import { sourceOutline } from './SourceNavigation';
+import { SourceActions } from './SourceActions';
 import type { OutlineItem } from './SourceNavigation';
 import { getPreferences, setPreferences, usePreferences } from './preferences';
 
 type Notify = (message: string, error?: boolean) => void;
 type FileEntry = { path: string; bytes: number };
+function useAppliedSource(deviceId?: string, file?: string) {
+  const [revision, setRevision] = useState('');
+  useEffect(() => {
+    const changed = (event: Event) => { const s = (event as CustomEvent).detail;
+      if (s?.deviceId !== deviceId) return;
+      const latest = s.actions?.filter((a: { type: string; status: string; path: string }) => a.type === 'file' && a.status === 'applied' && (!file || a.path === file)).at(-1);
+      if (latest) setRevision(latest.id);
+    }; window.addEventListener('signaldesk-ai', changed); return () => window.removeEventListener('signaldesk-ai', changed);
+  }, [deviceId, file]); return revision;
+}
 export type AgentRequest = { id: number; file: string; prompt: string };
 
 export function usePanelSize(key: string, initial: number, min: number, max: number) {
@@ -39,8 +50,9 @@ function Files({ files, prefix = '', selected, open, filtered }: { files: FileEn
 }
 export function ProjectExplorer({ state, selected, open, addProject, notify, opened, closeFile, outline, jump, openHardware }: { state: AppState; selected: string; open: (file: string) => void; addProject: () => void; notify: Notify; opened: string[]; closeFile: (file: string) => void; outline: OutlineItem[]; jump: (file: string, line: number) => void; openHardware: () => void }) {
   const [hardwareFiles, setHardwareFiles] = useState<FileEntry[]>([]);
+  const applied = useAppliedSource(state.activeDevice);
   const device = state.devices?.find(item => item.id === state.activeDevice), [files, setFiles] = useState<FileEntry[]>([]), [search, setSearch] = useState(''), [error, setError] = useState(''), [revision, setRevision] = useState(0);
-  useEffect(() => { let current = true; setFiles([]); setError(''); api<FileEntry[]>(`/ai/files?deviceId=${encodeURIComponent(state.activeDevice || '')}`).then(value => { if (current) setFiles(value); }).catch(error => { if (current) setError(error.message); }); return () => { current = false; }; }, [state.activeDevice, device?.projectRoot, revision]);
+  useEffect(() => { let current = true; setFiles([]); setError(''); api<FileEntry[]>(`/ai/files?deviceId=${encodeURIComponent(state.activeDevice || '')}`).then(value => { if (current) setFiles(value); }).catch(error => { if (current) setError(error.message); }); return () => { current = false; }; }, [state.activeDevice, device?.projectRoot, revision, applied]);
   useEffect(() => { let current = true; setHardwareFiles([]); api<{ files: FileEntry[] }>(`/hardware?deviceId=${encodeURIComponent(state.activeDevice || '')}`).then(value => { if (current) setHardwareFiles(value.files); }).catch(() => {}); return () => { current = false; }; }, [state.activeDevice, device?.projectRoot, revision]);
   const filtered = files.filter(file => file.path.toLowerCase().includes(search.toLowerCase()));
   return <section className="project-explorer" aria-label="项目资源管理器"><div className="explorer-heading"><FolderTree size={15} /><b>项目与设备</b><IconButton title="刷新项目文件" onClick={() => setRevision(value => value + 1)}><RefreshCw size={14} /></IconButton><IconButton title="导入项目" onClick={addProject}><FolderPlus size={15} /></IconButton></div>
@@ -58,16 +70,17 @@ export function ProjectExplorer({ state, selected, open, addProject, notify, ope
 export function SourceWorkspace({ file, state, analyze, notify, validate, jump, outlineChange, browse, addProject }: { browse: () => void; addProject: () => void; file: string; state: AppState; analyze: (file: string) => void; notify: Notify; validate: (mode: 'build' | 'test') => void; jump?: { id: number; line: number }; outlineChange: (file: string, items: OutlineItem[]) => void }) {
   const [languageOverride, setLanguageOverride] = useState<LanguageId | ''>('');
   const sourceLanguage = languageOverride || languageForFile(file);
+  const applied = useAppliedSource(state.activeDevice, file);
   useEffect(() => setLanguageOverride(''), [file]);
   const [searchOpen, setSearchOpen] = useState(false);
   const [cursor, setCursor] = useState({ line: 1, column: 1 });
   const [content, setContent] = useState(''), [hash, setHash] = useState(''), [loading, setLoading] = useState(false), [revision, setRevision] = useState(0), [search, setSearch] = useState(''), [line, setLine] = useState(0), [error, setError] = useState('');
-  useEffect(() => { let current = true; setContent(''); setHash(''); setLine(0); setError(''); if (!file) return; setLoading(true); api<{ content: string; hash: string }>(`/ai/file?deviceId=${encodeURIComponent(state.activeDevice || '')}&path=${encodeURIComponent(file)}`).then(value => { if (current) { setContent(value.content); setHash(value.hash); } }).catch(error => { if (current) setError(error.message); }).finally(() => { if (current) setLoading(false); }); return () => { current = false; }; }, [file, state.activeDevice, revision]);
+  useEffect(() => { let current = true; setContent(''); setHash(''); setLine(0); setError(''); if (!file) return; setLoading(true); api<{ content: string; hash: string }>(`/ai/file?deviceId=${encodeURIComponent(state.activeDevice || '')}&path=${encodeURIComponent(file)}`).then(value => { if (current) { setContent(value.content); setHash(value.hash); } }).catch(error => { if (current) setError(error.message); }).finally(() => { if (current) setLoading(false); }); return () => { current = false; }; }, [file, state.activeDevice, revision, applied]);
   const find = () => { if (!search) return; const lines = content.split('\n'), matches = lines.map((text, index) => text.toLowerCase().includes(search.toLowerCase()) ? index + 1 : 0).filter(Boolean); if (!matches.length) { notify('当前文件中未找到匹配内容'); return; } setLine(matches.find(index => index > line) || matches[0]); };
   useEffect(() => { if (jump) { setSearchOpen(true); setLine(jump.line); setRevision(value => value + 1); } }, [jump?.id]);
   useEffect(() => { if (jump && !loading) setLine(jump.line); }, [loading, jump?.id]);
   useEffect(() => { outlineChange(file, sourceOutline(file, content)); }, [file, content]);
-  return <section className="source-workspace" aria-label="项目源码浏览"><div className="source-breadcrumb"><FileCode2 size={15} /><span>{file || '未打开文件'}</span><small>只读</small><IconButton title="编译当前工程" onClick={() => validate('build')}><Hammer size={15} /></IconButton><IconButton title="选择并运行测试" onClick={() => validate('test')}><FlaskConical size={15} /></IconButton><IconButton title="搜索与跳转源码" aria-expanded={searchOpen} onClick={() => setSearchOpen(!searchOpen)}><Search size={14} /></IconButton><IconButton title="刷新当前源码" disabled={!file || loading} onClick={() => setRevision(value => value + 1)}><RefreshCw size={14} /></IconButton><button className="quiet-button" disabled={!file || loading || !!error} onClick={() => analyze(file)}><Bot size={14} />交给 Agent 审查</button></div>
+  return <section className="source-workspace" data-probe-file={file} data-source-hash={hash} aria-label="项目源码浏览"><div className="source-breadcrumb"><FileCode2 size={15} /><span>{file || '未打开文件'}</span><SourceActions key={JSON.stringify([state.activeDevice,state.devices?.find(d=>d.id===state.activeDevice)?.projectRoot,file])} root={state.devices?.find(d=>d.id===state.activeDevice)?.projectRoot||''} deviceId={state.activeDevice||''} file={file} content={content} hash={hash} line={cursor.line} column={cursor.column} reload={()=>setRevision(v=>v+1)}/><IconButton title="编译当前工程" onClick={() => validate('build')}><Hammer size={15} /></IconButton><IconButton title="选择并运行测试" onClick={() => validate('test')}><FlaskConical size={15} /></IconButton><IconButton title="搜索与跳转源码" aria-expanded={searchOpen} onClick={() => setSearchOpen(!searchOpen)}><Search size={14} /></IconButton><IconButton title="刷新当前源码" disabled={!file || loading} onClick={() => setRevision(value => value + 1)}><RefreshCw size={14} /></IconButton><button className="quiet-button" disabled={!file || loading || !!error} onClick={() => analyze(file)}><Bot size={14} />交给 Agent 审查</button></div>
     {file ? <><div className="source-search" hidden={!searchOpen}><Search size={14} /><input aria-label="搜索源码" placeholder="搜索当前文件" value={search} onChange={event => setSearch(event.target.value)} onKeyDown={event => { if (event.key === 'Enter' && !event.nativeEvent.isComposing) find(); }} /><button className="quiet-button" onClick={find}>下一个</button><label>行<input aria-label="跳转源码行" type="number" min={1} max={content.split('\n').length} value={line || ''} onChange={event => setLine(Math.max(1, Number(event.target.value) || 1))} /></label></div>{error && <p className="inline-error" role="alert">{error}</p>}{loading ? <div className="page-loading">正在读取源码</div> : <Editor key={file} value={content} onChange={() => {}} language={sourceLanguage} onCursor={(line, column) => setCursor({ line, column })} readOnly line={line} />}<div className="source-footer"><span>{content ? content.split('\n').length : 0} 行 <span className="source-cursor">行 {cursor.line}，列 {cursor.column}</span></span><select aria-label="源码语言" value={languageOverride} onChange={event => setLanguageOverride(event.target.value as LanguageId | '')}><option value="">自动 · {languages[languageForFile(file)].label}</option>{Object.entries(languages).map(([id, language]) => <option value={id} key={id}>{language.label}</option>)}</select><code>SHA256 {hash.slice(0, 16) || '—'}</code></div></> : <div className="source-empty work-empty">
       <Code2 className="empty-symbol" size={42} /><h2>未打开源码文件</h2>
       <div className="empty-actions"><button className="primary" disabled={!state.activeDevice} onClick={browse}><Search size={15} />查找工程文件</button>

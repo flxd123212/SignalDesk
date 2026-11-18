@@ -1,8 +1,7 @@
 import { parse } from 'csv-parse/sync';
 
-export function analyzeCan({ text, format = 'csv', bitrate = 500000, duration = 0 }) {
+export function parseCanFrames({ text, format = 'csv' }) {
   if (typeof text !== 'string' || Buffer.byteLength(text) > 4 * 1024 * 1024) throw new Error('CAN 记录不能超过 4 MiB');
-  if (!Number.isInteger(bitrate) || bitrate < 1000 || bitrate > 1000000) throw new Error('经典 CAN 码率应为 1 kbit/s..1 Mbit/s；CAN FD 需单独适配');
   let records;
   if (format === 'csv') records = parse(text, { columns: true, skip_empty_lines: true, trim: true, max_record_size: 8192 });
   else if (format === 'candump') records = text.split(/\r?\n/).filter(line => line.trim()).map((line, index) => {
@@ -25,6 +24,12 @@ export function analyzeCan({ text, format = 'csv', bitrate = 500000, duration = 
     return { time, id: identifier.toString(16).toUpperCase().padStart(extended ? 8 : 3, '0'), extended, rtr, dlc, data: data.toUpperCase(), baseBits, upperBits: baseBits + Math.floor(((extended ? 54 : 34) + dataBits - 1) / 4), dataBits };
   });
   if (frames.some((frame, index) => index && frame.time < frames[index - 1].time)) throw new Error('CAN 时间戳必须单调递增；请检查时钟回绕或时间单位');
+  return frames;
+}
+
+export function analyzeCan({ text, format = 'csv', bitrate = 500000, duration = 0 }) {
+  if (!Number.isInteger(bitrate) || bitrate < 1000 || bitrate > 1000000) throw new Error('经典 CAN 码率应为 1 kbit/s..1 Mbit/s；CAN FD 需单独适配');
+  const frames = parseCanFrames({ text, format });
   const elapsed = frames.at(-1).time - frames[0].time;
   if (!Number.isFinite(duration) || duration < 0 || (duration > 0 && duration < elapsed)) throw new Error('观察时长不能小于记录时间跨度');
   const seconds = duration || elapsed;

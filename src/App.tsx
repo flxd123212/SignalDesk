@@ -4,6 +4,8 @@ import { version } from '../package.json';
 import { ArrowDown, ArrowUp, BookOpen, Bot, Check, Circle, CircuitBoard, FolderOpen, FolderPlus, FolderTree, Info, PanelBottom, PanelLeftClose, PanelLeftOpen, Plug, RotateCcw, Search, Settings, AppWindow, Square, X } from 'lucide-react';
 import { api, formatBytes, useDevice, usePorts, showDeviceDiscovery } from './data';
 import { Terminal } from './Terminal';
+import { EngineeringLab, type LabKind } from './EngineeringLab';
+import { CrashTraceDialog } from './CrashTraceDialog';
 import { Connection } from './Connection';
 import { Workspace } from './Workspace';
 import { SendBar } from './SendBar';
@@ -24,7 +26,7 @@ import { ProjectSetupDialog } from './ProjectSetupDialog';
 import { BottomDock, PanelDivider, ProjectExplorer, QuickConnection, SourceWorkspace, usePanelSize } from './WorkbenchPanels';
 import type { AgentRequest, DockTab } from './WorkbenchPanels';
 import type { ValidationRequest } from './ValidationPanel';
-import { QuickOpenFile } from './SourceNavigation';
+import { ProjectSearch, QuickOpenFile } from './SourceNavigation';
 import type { OutlineItem } from './SourceNavigation';
 import { WorkbenchMenu } from './WorkbenchMenu';
 import type { Page } from './types';
@@ -36,6 +38,7 @@ import { DeviceDiscovery } from './DeviceDiscovery';
 import { useSurfaceMotion } from './motion';
 import { accentInk, useBackground } from './appearance';
 import { desktopPlatform, shortcutLabel } from './platform';
+import { matchWorkbenchShortcut, workbenchShortcuts, type ShortcutAction } from './workbenchShortcuts';
 
 const Graph = lazy(() => import('./Graph').then(module => ({ default: module.Graph })));
 const DisplayStudio = lazy(() => import('./display/Studio'));
@@ -80,6 +83,12 @@ export default function App() {
   const dockOpen = simple ? simpleDockOpen : fullDockOpen, setDockOpen = simple ? setSimpleDockOpen : setFullDockOpen;
   const [dockTab, setDockTab] = useState<DockTab>('logs'), [palette, setPalette] = useState(false), [setup, setSetup] = useState<boolean | string>(false);
   const [designLaunch, launchDesign] = useState(0);
+  const [searchScope, setSearchScope] = useState('');
+  const [engineeringLab,setEngineeringLab]=useState<LabKind|null>(null);
+  const [probeSeed,setProbeSeed]=useState<{path:string;line:number}>();
+  useEffect(()=>{const open=(e:Event)=>{const d=(e as CustomEvent).detail;setProbeSeed(d.path?{path:d.path,line:d.line}:undefined);setEngineeringLab(d.kind);};window.addEventListener('signaldesk-lab',open);return()=>window.removeEventListener('signaldesk-lab',open);},[]);
+  useEffect(()=>{const open=()=>setEngineeringLab('size');window.addEventListener('signaldesk-size-diff',open);return()=>window.removeEventListener('signaldesk-size-diff',open);},[]);
+  const [trace, setTrace] = useState<{ scope: string; snapshot?: string } | null>(null);
   const [validationRequests, setValidationRequests] = useState<Record<string, ValidationRequest | undefined>>({}), [sourceJump, setSourceJump] = useState<{ scope: string; file: string; id: number; line: number } | null>(null);
   const [quickFile, setQuickFile] = useState(false), [outlines, setOutlines] = useState<Record<string, { file: string; items: OutlineItem[] }>>({});
   const shortcuts = useRef<(event: KeyboardEvent) => void>(() => {});
@@ -94,13 +103,18 @@ export default function App() {
   const inspectorContext = useMemo(() => ({ publish: setInspector, show: revealInspector }), [revealInspector]);
   const navigate = (next: Page) => { if (narrow) setMobileSideOpen(false); setPage(next); setAreaPages(current => ({ ...current, [workspaceFor(next).id]: next })); if (next === 'editor' || next === 'hardware') setSideTab('project'); if (['hardware', 'circuit', 'graph'].includes(next) && innerWidth >= 1100) revealInspector(); setTabs(current => current.includes(next) ? current : [...current.slice(-11), next]); const url = new URL(location.href); url.searchParams.set('view', next); history.pushState(null, '', url); };
   useEffect(() => {
-    const key = (event: KeyboardEvent) => { if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k' && !document.querySelector('dialog[open], [role="dialog"]')) { event.preventDefault(); setPalette(true); } };
     const back = () => { const next = initialPage(); setPage(next); setTabs(current => current.includes(next) ? current : [...current.slice(-7), next]); };
-    window.addEventListener('keydown', key); window.addEventListener('popstate', back); return () => { window.removeEventListener('keydown', key); window.removeEventListener('popstate', back); clearTimeout(toastTimer.current); };
+    window.addEventListener('popstate', back); return () => { window.removeEventListener('popstate', back); clearTimeout(toastTimer.current); };
   }, []);
   const activePage = pages.find(item => item.id === page)!;
   const activeDevice = state.devices?.find(device => device.id === state.activeDevice), projectName = activeDevice?.projectRoot?.split(/[\\/]/).filter(Boolean).at(-1);
   const scopeKey = `${state.activeDevice}:${activeDevice?.projectRoot || ''}`;
+  useEffect(() => setSearchScope(''), [scopeKey]);
+  useEffect(() => setTrace(null), [scopeKey]);
+  const openTrace = (snapshot?: string) => {
+    if (!activeDevice?.projectRoot) { notify('请先添加或绑定固件工程'); return; }
+    setTrace({ scope: scopeKey, snapshot });
+  };
   useEffect(() => {
     const openDesign = () => { setAgentOpen(false); navigate('display'); launchDesign(n => n + 1); };
     window.addEventListener('signaldesk-open-display-assistant', openDesign);
@@ -127,16 +141,36 @@ export default function App() {
       else if (action.startsWith('settings:')) setSettingsSection(action.slice(9) as SettingsSection);
     });
   };
-  const validate = (mode: 'build' | 'test') => { setValidationRequests(current => ({ ...current, [scopeKey]: { id: Date.now(), mode } })); setDockTab('verify'); setDockOpen(true); dockSize.update(Math.max(dockSize.size, 270)); };
+  const validationRequest = validationRequests[scopeKey];
+  const consumeValidation = () => setValidationRequests(current => ({ ...current, [scopeKey]: undefined }));
+  const validate = (mode: ValidationRequest['mode']) => {
+    setValidationRequests(current => ({ ...current, [scopeKey]: { id: Date.now(), mode } }));
+    if (page === 'validation') return;
+    setDockTab('verify'); setDockOpen(true); dockSize.update(Math.max(dockSize.size, 270));
+  };
+  const shortcutActions: Record<ShortcutAction, () => void> = {
+    palette: () => setPalette(true), help: () => setShortcutHelp(true), discover: showDeviceDiscovery,
+    terminal: () => navigate('terminal'), build: () => validate('build'), test: () => validate('test'),
+    problems: () => validate('problems'), memory: () => validate('memory'),
+    backtrace: () => openTrace(),
+  };
   const jumpToDiagnostic = (file: string, line: number) => { openFile(file); setSourceJump({ scope: scopeKey, file, line, id: Date.now() }); };
+  useEffect(()=>{const go=(e:Event)=>{const r=(e as CustomEvent).detail;if(r?.path)jumpToDiagnostic(r.path,r.line);};window.addEventListener('signaldesk-source-location',go);return()=>window.removeEventListener('signaldesk-source-location',go);});
   const analyzeValidation = (file: string, prompt: string) => { setAgentRequests(current => ({ ...current, [scopeKey]: { id: Date.now(), file, prompt } })); setNavExpanded(false); setDockOpen(false); setRightTab('agent'); setAgentOpen(true); };
   shortcuts.current = event => {
-    if (event.key === 'F1' && !event.ctrlKey && !event.metaKey && !event.altKey) { event.preventDefault(); if (!document.querySelector('dialog[open], [role="dialog"]')) openTutorial(tutorialForPage(page).id); return; }
-    if (!event.isComposing && (event.ctrlKey || event.metaKey) && event.altKey && /^Digit[1-4]$/.test(event.code) && !document.querySelector('dialog[open], [role="dialog"]')) { event.preventDefault(); const next = workspaces[Number(event.code.slice(-1)) - 1]; navigate(areaPages[next.id] || next.home); return; }
-    if (event.isComposing || event.repeat || !(event.ctrlKey || event.metaKey) || event.altKey || document.querySelector('dialog[open], [role="dialog"]')) return;
+    if (event.defaultPrevented || event.repeat || event.isComposing || event.keyCode === 229 || event.getModifierState('AltGraph') || document.querySelector('dialog[open], [role="dialog"], [role="menu"]')) return;
+    const action = matchWorkbenchShortcut(event);
+    if (action) {
+      event.preventDefault();
+      if (['discover', 'build', 'test', 'problems', 'memory', 'backtrace'].includes(action) && !online) return;
+      shortcutActions[action](); return;
+    }
+    if (event.key === 'F1' && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) { event.preventDefault(); openTutorial(tutorialForPage(page).id); return; }
+    if ((event.ctrlKey || event.metaKey) && event.altKey && !event.shiftKey && /^Digit[1-4]$/.test(event.code)) { event.preventDefault(); const next = workspaces[Number(event.code.slice(-1)) - 1]; navigate(areaPages[next.id] || next.home); return; }
+    if (!(event.ctrlKey || event.metaKey) || event.altKey) return;
     const key = event.key.toLowerCase();
     if (key === 'p' && !event.shiftKey) { event.preventDefault(); setQuickFile(true); }
-    else if (key === 'b' && event.shiftKey && online) { event.preventDefault(); validate('build'); }
+    else if (key === 'f' && event.shiftKey && online && activeDevice?.projectRoot) { event.preventDefault(); setSearchScope(scopeKey); }
     else if (key === 'b' && !event.shiftKey) { event.preventDefault(); setSideOpen(!effectiveSide); }
     else if (key === ',') { event.preventDefault(); setSettingsSection('appearance'); }
     else if (key === 'j' && !event.shiftKey) { event.preventDefault(); setDockOpen(!dockOpen); }
@@ -146,8 +180,8 @@ export default function App() {
   const autoSend = ['workspace', 'terminal', 'commands', 'instruments', 'frames', 'automation'].includes(page);
   const showSend = prefs.sendBar === 'always' || prefs.sendBar === 'auto' && (autoSend || sourceSendOpen);
   const [recordBusy, setRecordBusy] = useState(false);
-  const record = async () => { setRecordBusy(true); try { await api(state.recording ? '/record/stop' : '/record/start', {}); notify(state.recording ? '录制已保存' : '开始记录原始收发数据'); } catch (error) { notify((error as Error).message, true); } finally { setRecordBusy(false); } };
-  const resetProcessing = async () => { try { await api('/processing', { mode: 'raw' }); notify('已恢复原始通道'); } catch (error) { notify((error as Error).message, true); } };
+  const record = async () => { setRecordBusy(true); try { await api(state.recording ? '/record/stop' : '/record/start', { deviceId: state.activeDevice, recordingId: state.recording?.id }); notify(state.recording ? '录制已保存' : '开始记录原始收发数据'); } catch (error) { notify((error as Error).message, true); } finally { setRecordBusy(false); } };
+  const resetProcessing = async () => { try { await api('/processing', { mode: 'raw', deviceId: state.activeDevice }); notify('已恢复原始通道'); } catch (error) { notify((error as Error).message, true); } };
   const fileMenu = [
     ...(window.signaldeskDesktop ? [{ label: '新建独立工作区窗口', shortcut: 'Ctrl+Shift+N', action: () => { void window.signaldeskDesktop!.newWindow().catch(error => notify(error.message, true)); } }, { label: '关闭窗口', action: () => { void window.signaldeskDesktop!.closeWindow(); } }] : []),
     { label: '快速打开文件…', shortcut: 'Ctrl+P', action: () => setQuickFile(true) },
@@ -160,7 +194,7 @@ export default function App() {
   const helpMenu = [
     { label: '使用教程…', action: () => openTutorial() },
     { label: '当前页面帮助', shortcut: 'F1', action: () => openTutorial(tutorialForPage(page).id) },
-    { label: '键盘快捷操作…', action: () => setShortcutHelp(true) },
+    { label: '键盘快捷操作…', shortcut: workbenchShortcuts.help.keys[0], action: shortcutActions.help },
     { label: '重看入门教程', action: () => openTutorial('first-device') },
     { label: '关于 SignalDesk', action: () => setAbout(true) },
   ];
@@ -180,19 +214,24 @@ export default function App() {
     { label: '重置界面布局', action: resetLayout },
   ];
   const toolMenu = [
+    { label: '工程实验工具…', action: () => setEngineeringLab(area.id==='hardware'?'rules':area.id==='integration'?'bus':area.id==='testing'?'matrix':'template') },
     { label: '节点一键配置', action: nodeSetup },
-    { label: '发现设备…', action: showDeviceDiscovery },
+    { label: '发现设备…', shortcut: workbenchShortcuts.discover.keys[0], disabled: !online, action: shortcutActions.discover },
     { label: '屏幕设计器', action: () => navigate('display') },
     { label: '工具链中心', action: () => navigate('tooling') },
-    { label: '编译当前工程', shortcut: 'Ctrl+Shift+B', disabled: !online, action: () => validate('build') },
-    { label: '源码测试', disabled: !online, action: () => validate('test') },
+    { label: '编译当前工程', shortcut: workbenchShortcuts.build.keys[0], disabled: !online, action: shortcutActions.build },
+    { label: '源码测试', shortcut: workbenchShortcuts.test.keys[0], disabled: !online, action: shortcutActions.test },
+    { label: '编译问题', shortcut: workbenchShortcuts.problems.keys[0], disabled: !online, action: shortcutActions.problems },
+    { label: '固件容量', shortcut: workbenchShortcuts.memory.keys[0], disabled: !online, action: shortcutActions.memory },
+    { label: '崩溃回溯…', shortcut: workbenchShortcuts.backtrace.keys[0], disabled: !online, action: shortcutActions.backtrace },
     { label: '项目体检', disabled: !online, action: () => { setRightTab('agent'); setAgentOpen(true); setNavExpanded(false); void api('/ai/project-health', { deviceId: state.activeDevice }).catch(error => notify(error.message, true)); } },
     { label: '工具链命令', action: () => { setDockTab('build'); setDockOpen(true); } },
-    ...pages.map(item => ({ label: item.label, group: item.group, action: () => navigate(item.id) })),
+    ...pages.map(item => ({ label: item.label, group: item.group, shortcut: item.id === 'terminal' ? workbenchShortcuts.terminal.keys[0] : undefined, action: () => navigate(item.id) })),
     { label: '输出与日志面板', action: () => { setDockTab('logs'); setDockOpen(true); } },
   ];
   const graphAction = (action: string) => window.dispatchEvent(new CustomEvent('signaldesk-graph-action', { detail: action }));
   const editMenu = [
+    { label: '查找工程正文…', shortcut: 'Ctrl+Shift+F', disabled: !online || !activeDevice?.projectRoot, action: () => setSearchScope(scopeKey) },
     ...(page === 'graph' ? [{ label: '撤销节点操作', shortcut: 'Ctrl+Z', action: () => graphAction('undo') }, { label: '重做节点操作', shortcut: 'Ctrl+Shift+Z', action: () => graphAction('redo') }, { label: '复制所选节点', shortcut: 'Ctrl+D', action: () => graphAction('duplicate') }, { label: '删除所选节点', shortcut: 'Delete', action: () => graphAction('delete') }, { label: '连接节点…', shortcut: 'C', action: () => graphAction('connect') }, { label: '自动排列节点', shortcut: 'L', action: () => graphAction('layout') }, { label: '适应节点视图', shortcut: 'F', action: () => graphAction('fit') }] : []),
     ...(window.signaldeskDesktop ? [{ label: '系统编辑操作…', action: () => { void window.signaldeskDesktop!.nativeMenu('edit'); } }] : []),
     { label: '快速定位文件…', shortcut: 'Ctrl+P', action: () => setQuickFile(true) }, { label: '键盘快捷操作…', action: () => setShortcutHelp(true) },
@@ -227,30 +266,30 @@ export default function App() {
         </div>
         <div ref={pageSurface} className={`page-content page-${page}`}><Suspense key={scopeKey} fallback={<div className="page-loading" role="status">正在加载工作区</div>}>
           {tabs.includes('workspace') && <div className="cached-workspace" hidden={page !== 'workspace'}><Workspace state={state} notify={notify} simple={simple} active={page === 'workspace'} configure={configure} recordings={() => navigate('sessions')} /></div>}
-          {page === 'terminal' && <><DecodeQuality state={state} /><Terminal /></>}
+          {page === 'terminal' && <><DecodeQuality state={state} /><Terminal onTrace={openTrace} /></>}
           {page === 'editor' && <div className="editor-page"><div className="source-tabs">{sourceTabs.files.map(file => <div key={file} className={sourceTabs.selected === file ? 'active' : ''}><button title={file} onClick={() => openFile(file)}>{file.split('/').at(-1)}</button><IconButton title={`关闭文件 ${file}`} onClick={() => closeFile(file)}><X size={12} /></IconButton></div>)}</div><SourceWorkspace browse={() => setQuickFile(true)} addProject={() => setSetup(true)} file={sourceTabs.selected} state={state} analyze={reviewFile} notify={notify} validate={validate} outlineChange={(file, items) => setOutlines(current => ({ ...current, [scopeKey]: { file, items } }))} jump={sourceJump?.scope === scopeKey && sourceJump.file === sourceTabs.selected ? sourceJump : undefined} /></div>}
           {page === 'graph' && <Graph state={state} notify={notify} openWorkspace={() => navigate('workspace')} />}
           {page === 'display' && <DisplayStudio key={scopeKey} launch={designLaunch} consumeLaunch={()=>launchDesign(0)} deviceId={state.activeDevice || ''} root={activeDevice?.projectRoot || ''} review={prompt => analyzeValidation('', prompt)} tools={() => navigate('tooling')} openProject={setSetup} />}
           {page === 'tooling' && <ToolCenter />}
           {(page === 'hardware' || page === 'circuit') && <HardwareWorkbench key={`${scopeKey}:${page}`} state={state} live={page === 'circuit'} notify={notify} openSource={jumpToDiagnostic} openTests={() => navigate('automation')} />}
-          {page === 'validation' && <ValidationPanel key={scopeKey} deviceId={state.activeDevice || ''} root={activeDevice?.projectRoot || ''} consume={() => {}} openSource={jumpToDiagnostic} analyze={analyzeValidation} deviceTests={() => navigate('automation')} />}
-          {page === 'can' && <CanAnalysis notify={notify} />}
+          {page === 'validation' && <ValidationPanel key={scopeKey} deviceId={state.activeDevice || ''} root={activeDevice?.projectRoot || ''} request={validationRequest} consume={consumeValidation} openSource={jumpToDiagnostic} analyze={analyzeValidation} deviceTests={() => navigate('automation')} />}
+          {page === 'can' && <CanAnalysis notify={notify} openWave={()=>navigate('workspace')} />}
           {page === 'attitude' && <Attitude state={state} />}
           {page === 'widgets' && <Widgets state={state} notify={notify} />}
           {page === 'script' && <Script state={state} notify={notify} />}
           {page === 'commands' && <Commands state={state} notify={notify} />}
-          {page === 'instruments' && <Instruments connected={state.connected} notify={notify} />}
+          {page === 'instruments' && <Instruments connected={state.connected && state.source !== 'replay'} deviceId={state.activeDevice} notify={notify} />}
           {page === 'sessions' && <Sessions state={state} notify={notify} />}
           {page === 'agent' && <AgentPanel device={state} notify={notify} openSource={jumpToDiagnostic} request={agentRequests[scopeKey]} />}
           {page === 'frames' && <FrameTools state={state} notify={notify} />}
           {page === 'automation' && <Automation state={state} notify={notify} />}
-          {page === 'alarms' && <AlarmPanel state={state} notify={notify} />}
-          {page === 'chips' && <Chips notify={notify} device={state} />}
+          {page === 'alarms' && <AlarmPanel key={scopeKey} state={state} notify={notify} review={prompt=>analyzeValidation('',prompt)}/>}
+          {page === 'chips' && <Chips key={scopeKey} notify={notify} device={state} />}
           {page === 'overview' && <Overview notify={notify} openWorkspace={() => navigate('workspace')} />}
           {page === 'logs' && <Logs state={state} notify={notify} />}
           {page === 'external' && <ExternalAgents state={state} notify={notify} />}
         </Suspense></div>
-        {dockOpen && <><PanelDivider panel={dockSize} label="调整底部面板高度" horizontal reverse /><BottomDock state={state} notify={notify} close={() => setDockOpen(false)} tab={dockTab} select={setDockTab} validationRequest={validationRequests[scopeKey]} consumeValidation={() => setValidationRequests(current => ({ ...current, [scopeKey]: undefined }))} openSource={jumpToDiagnostic} analyze={analyzeValidation} deviceTests={() => navigate('automation')} /></>}
+        {dockOpen && !(page === 'validation' && dockTab === 'verify') && <><PanelDivider panel={dockSize} label="调整底部面板高度" horizontal reverse /><BottomDock state={state} notify={notify} close={() => setDockOpen(false)} tab={dockTab} select={setDockTab} validationRequest={page === 'validation' ? undefined : validationRequest} consumeValidation={consumeValidation} openSource={jumpToDiagnostic} analyze={analyzeValidation} deviceTests={() => navigate('automation')} /></>}
         {!autoSend && prefs.sendBar === 'auto' && <div className="send-reveal"><button aria-expanded={sourceSendOpen} onClick={() => setSourceSendOpen(!sourceSendOpen)}><Plug size={13} />{sourceSendOpen ? '收起串口发送栏' : '串口发送'}<span>{state.config.path === 'unassigned' ? '未匹配串口' : state.config.path}</span></button></div>}
         <div className="context-sendbar" hidden={!showSend}><SendBar key={`send:${state.activeDevice || 'initial'}`} state={state} notify={notify} /></div>
       </main>
@@ -260,8 +299,11 @@ export default function App() {
     {toast && <div role="status" className={`toast ${toast.error ? 'error' : ''}`}>{toast.error ? <Info size={17} /> : <Check size={17} />}<span>{toast.message}</span><IconButton title="关闭消息" onClick={() => setToast(null)}><X size={15} /></IconButton></div>}
     <DeviceDiscovery state={state} online={online} detached={detached} addProject={() => setSetup(true)} notify={notify} />
     {shortcutHelp && <ShortcutHelp close={() => setShortcutHelp(false)} />}
+    {engineeringLab && <EngineeringLab key={scopeKey} initial={engineeringLab} seed={probeSeed} state={state} close={()=>{setEngineeringLab(null);setProbeSeed(undefined);}} openProject={setSetup} problems={()=>validate('problems')} review={prompt=>analyzeValidation('',prompt)}/>}
+    {trace?.scope === scopeKey && activeDevice?.projectRoot && <CrashTraceDialog deviceId={activeDevice.id} root={activeDevice.projectRoot} snapshot={trace.snapshot} close={() => setTrace(null)} open={(file, line) => { setTrace(null); jumpToDiagnostic(file, line); }} />}
     {help && <HelpCenter initial={help} close={() => setHelp(null)} perform={performTutorial} />}
-    {palette && <CommandPalette actions={[{ id: 'help', name: '使用教程', terms: '帮助 教程 tutorial help 入门 新手', icon: BookOpen, run: () => { requestAnimationFrame(() => openTutorial()); } }, { id: 'project', name: '添加项目', terms: '导入 工程 一键配置', icon: FolderPlus, run: () => { requestAnimationFrame(() => setSetup(true)); } }, { id: 'connect', name: '连接设置', terms: '串口 波特率 参数', icon: Plug, run: configure }, { id: 'settings', name: '设置', terms: '外观 主题 背景 偏好', icon: Settings, run: () => { requestAnimationFrame(() => setSettingsSection('appearance')); } }, { id: 'simple', name: simple ? '切换完整模式' : '切换精简模式', terms: '精简 完整 面板 布局', icon: PanelLeftClose, run: () => setSimple(!simple) }]} devices={state.devices || []} navigate={navigate} selectDevice={async id => { try { await api('/devices/select', { id }); } catch (error) { notify((error as Error).message, true); } }} close={() => setPalette(false)} />}
+    {palette && <CommandPalette actions={[{ id: 'backtrace', name: '崩溃回溯', terms: 'F9 HardFault ELF backtrace 异常 指令地址 调用栈', icon: Search, run: () => openTrace() }, { id: 'help', name: '使用教程', terms: '帮助 教程 tutorial help 入门 新手', icon: BookOpen, run: () => { requestAnimationFrame(() => openTutorial()); } }, { id: 'project', name: '添加项目', terms: '导入 工程 一键配置', icon: FolderPlus, run: () => { requestAnimationFrame(() => setSetup(true)); } }, { id: 'connect', name: '连接设置', terms: '串口 波特率 参数', icon: Plug, run: configure }, { id: 'settings', name: '设置', terms: '外观 主题 背景 偏好', icon: Settings, run: () => { requestAnimationFrame(() => setSettingsSection('appearance')); } }, { id: 'simple', name: simple ? '切换完整模式' : '切换精简模式', terms: '精简 完整 面板 布局', icon: PanelLeftClose, run: () => setSimple(!simple) }]} devices={state.devices || []} navigate={navigate} selectDevice={async id => { try { await api('/devices/select', { id }); } catch (error) { notify((error as Error).message, true); } }} close={() => setPalette(false)} />}
+    {searchScope === scopeKey && activeDevice?.projectRoot && <ProjectSearch key={scopeKey} root={activeDevice.projectRoot} deviceId={activeDevice.id} close={() => setSearchScope('')} open={jumpToDiagnostic}/>}
     {quickFile && state.activeDevice && <QuickOpenFile key={scopeKey} deviceId={state.activeDevice || ''} close={() => setQuickFile(false)} open={(file, line) => { if (line) jumpToDiagnostic(file, line); else openFile(file); setSideTab('project'); }} />}
     {setup && <ProjectSetupDialog initialRoot={typeof setup === 'string' ? setup : ''} close={() => setSetup(false)} completed={result => { const generated = typeof setup === 'string'; setSetup(false); setNavExpanded(false); setSideTab('project'); if (!simple) setConnectionOpen(true); navigate(generated ? 'validation' : result.protocol === 'raw' ? 'terminal' : 'workspace'); notify(`${result.reused ? '已打开项目' : '项目已添加'}${result.connected ? '，设备已连接' : '，设备未连接'}${result.warnings.length ? `。${result.warnings.join('；')}` : ''}`); }} />}
     {settingsSection && <SettingsHub openTutorial={() => { setSettingsSection(null); requestAnimationFrame(() => openTutorial()); }} key={scopeKey} device={state} initial={settingsSection} simple={simple} setSimple={setSimple} navExpanded={navExpanded} setNavExpanded={setNavExpanded} resetLayout={resetLayout} close={() => setSettingsSection(null)} configure={configure} navigate={navigate} notify={notify} />}{about && <div className="modal-backdrop" onClick={() => setAbout(false)}><section role="dialog" aria-modal="true" aria-label="关于 SignalDesk" className="about-dialog" onClick={event => event.stopPropagation()}><div className="panel-toolbar"><span>关于 SignalDesk</span><IconButton title="关闭关于窗口" onClick={() => setAbout(false)}><X size={17} /></IconButton></div><div className="about-content"><CircuitBoard size={38} /><h2>SignalDesk</h2><p>嵌入式开发工作台 · {version}</p><div className="about-libraries">React · uPlot · React Flow · CodeMirror<br />serialport · Electron · fft.js</div><p className="muted">架构参考：Lissio（Apache-2.0）</p></div></section></div>}

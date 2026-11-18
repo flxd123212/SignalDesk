@@ -87,6 +87,16 @@ int main(void) {
     await panel.getByRole('button', { name: '交给 Agent 排查', exact: true }).click();
     await expect(page.getByLabel('Agent 分析请求')).toContainText('missing_result');
     expect((await call('/ai/state')).messages.length).toBe(0);
+    const nextSession = await call('/ai/sessions/create', { name: 'Review historical build' });
+    expect(nextSession.sessionId).not.toBe(report.sessionId);
+    await page.goto(`${runtime.address}/?view=validation`);
+    await panel.getByRole('button', { name: /^记录 / }).click();
+    await panel.locator('.validation-history > button').first().click();
+    const historical = page.waitForEvent('download');
+    await panel.getByRole('button', { name: '导出验证报告', exact: true }).click();
+    const exported = JSON.parse(await fs.readFile((await (await historical).path())!, 'utf8'));
+    expect(exported.sessionId).toBe(report.sessionId);
+    expect(exported.sessionId).toBe(exported.validation.sessionId);
     expect(errors).toEqual([]);
   } finally { await page.close(); await runtime.close(); await fs.rm(directory, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 }); }
 });
@@ -124,6 +134,9 @@ test('GCC project settings configure real cross compilation and show ELF target 
     await expect(panel.locator('.validation-artifacts')).toContainText('RISC-V · 32 bit');
     await expect(panel.locator('.validation-artifacts')).toContainText('compile_check.elf');
     await expect(panel.locator('.validation-artifacts')).not.toContainText('CMakeDetermineCompilerABI');
+    await page.keyboard.press('Shift+F8');
+    await expect(panel.getByRole('table', { name: '固件容量' })).toContainText('FLASH');
+    await expect(panel.getByRole('table', { name: '固件容量' })).toContainText('RAM');
     await expect(panel.getByRole('button', { name: '运行选定测试', exact: true })).toBeDisabled();
     await page.screenshot({ path: 'artifacts/ide-gcc-cross-compile.png', fullPage: true });
     await page.setViewportSize({ width: 390, height: 844 });

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Code2, CircuitBoard, Activity, FlaskConical, X, SlidersHorizontal } from 'lucide-react';
 import type { AppState, Page } from './types';
 import { pages } from './navigation';
@@ -6,6 +6,7 @@ import { IconButton } from './ui';
 import { usePreferences } from './preferences';
 import { WorkbenchMenu } from './WorkbenchMenu';
 import { shortcutLabel } from './platform';
+import { workbenchShortcuts } from './workbenchShortcuts';
 
 export const workspaces = [
   { id: 'software', label: '软件', icon: Code2, home: 'editor', pages: ['editor', 'tooling', 'chips', 'script', 'widgets', 'agent', 'external'] },
@@ -29,6 +30,21 @@ export function ContextProperties({ state, page, configure, openHardware }: { st
 
 export function ShortcutHelp({ close }: { close: () => void }) {
   const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => { dialog.current?.showModal(); }, []);
-  return <dialog ref={dialog} className="binding-dialog shortcut-dialog" aria-label="键盘快捷操作" onCancel={close}><div className="panel-toolbar"><span>键盘快捷操作</span><IconButton title="关闭快捷操作" onClick={close}><X size={16} /></IconButton></div><div className="binding-content"><table><tbody>{[['当前页面帮助', 'F1'], ['切换软件 / 硬件 / 联调 / 测试', 'Ctrl+Alt+1 / 2 / 3 / 4'], ['查找功能', 'Ctrl+K'], ['快速打开文件', 'Ctrl+P'], ['项目树 / 底部输出', 'Ctrl+B / Ctrl+J'], ['设置', 'Ctrl+,'], ['编译当前工程', 'Ctrl+Shift+B'], ['节点：撤销 / 重做', 'Ctrl+Z / Ctrl+Shift+Z'], ['节点：复制所选 / 全选', 'Ctrl+D / Ctrl+A'], ['节点：添加 / 连接', 'N / C'], ['节点：自动排列 / 适应视图', 'L / F'], ['节点：应用 / 删除所选', 'Ctrl+S / Delete'], ['节点：移动', 'Tab 聚焦，Enter 选择，方向键移动'], ['关闭弹窗 / 退出全屏', 'Esc']].map(([label, key]) => <tr key={label}><td>{label}</td><td><kbd>{shortcutLabel(key)}</kbd></td></tr>)}</tbody></table></div></dialog>;
+  const [query, setQuery] = useState('');
+  useEffect(() => { const element = dialog.current; element?.showModal(); return () => element?.close(); }, []);
+  const rows = [
+    ...Object.values(workbenchShortcuts).map(({ label, keys }) => [label, keys.join(' / ')]),
+    ['当前页面帮助', 'F1'], ['切换软件 / 硬件 / 联调 / 测试', 'Ctrl+Alt+1 / 2 / 3 / 4'],
+    ['快速打开文件', 'Ctrl+P'], ['查找工程正文', 'Ctrl+Shift+F'], ['项目树 / 底部输出', 'Ctrl+B / Ctrl+J'], ['设置', 'Ctrl+,'],
+    ['节点撤销 / 重做', 'Ctrl+Z / Ctrl+Shift+Z'], ['节点复制所选 / 全选', 'Ctrl+D / Ctrl+A'], ['节点添加 / 连接', 'N / C'],
+    ['节点自动排列 / 适应视图', 'L / F'], ['节点应用 / 删除所选', 'Ctrl+S / Delete'], ['节点移动', 'Tab 聚焦，Enter 选择，方向键移动'], ['关闭弹窗 / 退出全屏', 'Esc'],
+  ].filter(([label, keys]) => `${label} ${shortcutLabel(keys)}`.toLowerCase().includes(query.trim().toLowerCase()));
+  return <dialog ref={dialog} className="binding-dialog shortcut-dialog" aria-label="键盘快捷操作" onCancel={close} onKeyDown={event => {
+    if (event.key === 'Escape' && !event.nativeEvent.isComposing) { event.preventDefault(); close(); }
+  }}>
+    <div className="panel-toolbar"><span>键盘快捷操作</span><IconButton title="关闭快捷操作" onClick={close}><X size={16} /></IconButton></div>
+    <div className="binding-content"><input type="search" autoFocus aria-label="筛选快捷键" placeholder="搜索操作或按键" value={query} onChange={event => setQuery(event.target.value)} />
+      <table><tbody>{rows.map(([label, key]) => <tr key={label}><td>{label}</td><td><kbd>{shortcutLabel(key)}</kbd></td></tr>)}</tbody></table>
+      {!rows.length && <p role="status" className="muted">没有匹配的快捷键</p>}
+    </div></dialog>;
 }

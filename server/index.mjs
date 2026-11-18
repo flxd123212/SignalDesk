@@ -27,13 +27,22 @@ import { chipCatalog } from './catalog.mjs';
 import { PortDiscovery, identifyBootLog, inspectProject, matchBinding } from './identification.mjs';
 import { graphTest } from './testing.mjs';
 import { AlarmService } from './alarms.mjs';
+import { IncidentStore } from './incident-store.mjs';
+import { tuneParameter } from './device-readback.mjs';
+import { buildFlashPlan } from './firmware-check.mjs';
+import { SoakRuns } from './soak.mjs';
 import { CommandQueues } from './command-queue.mjs';
 import { analyzeCan } from './can-analysis.mjs';
 import { WidgetSandbox } from './widgets.mjs';
 import { ProjectSetup } from './project-setup.mjs';
 import { ProjectValidation } from './validation.mjs';
 import { discoverGcc } from './gcc.mjs';
+import { BoardMatrix, checkBoardRules, compareFirmware, dbcSignals, decodeCapture, makeExample, replayDbcSignal, projectLabFiles } from './engineering.mjs';
+import { traceArtifacts, symbolizeCrash } from './crash-trace.mjs';
 import { HardwareStore, parseKiCadNetlist, readProjectNetlist, listHardwareFiles, validateHardware, hardwareChecks } from './hardware.mjs';
+import { draftProjectPrompt } from './ai/project-run.mjs';
+import { BenchRuns } from './bench.mjs';
+import { ProbeSession, clangQuery } from './source-tooling.mjs';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -45,19 +54,25 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   const displays = displayStore(path.join(directory, '..', 'displays'), engine);
   const workspace = new WorkspaceStore(path.join(directory, '..', 'devices.json'), engine); await workspace.load();
   if (!autoDemo) for (const device of engine.devices.values()) if (device.engine.config.path === 'demo') device.engine.config = { ...device.engine.config, path: 'unassigned', protocol: 'raw' };
-  const automation = new TestRunner();
+  const testRunners = new WeakMap();
+  const matrix = new BoardMatrix();
+  const bench = new BenchRuns(), probe = new ProbeSession();
+  const boardIssues = new Map();
   const chips = new ChipService(path.join(directory, '..', 'firmware'), engine);
   const detectedTools = await discoverToolchains();
   const agent = new AgentRegistry(engine, path.join(examplesDirectory, 'SignalGenerator'), path.join(directory, '..', 'changes'), detectedTools);
   await agent.restore(path.join(directory, '..', 'agent-state.json'), agentEncryption);
   const logs = new EventLog(path.join(directory, '..', 'logs')); await logs.init();
   const alarms = new AlarmService(engine, logs);
+  const incidents = new IncidentStore(path.join(directory,'..','incidents'),engine,alarms);
+  const soak = new SoakRuns(path.join(directory,'..','soak'),(reason,scope)=>{const device=engine.devices.get(JSON.parse(scope)[0]);if(device)return alarms.record(device,{kind:'soak',name:'长稳测试首次失败',message:reason});});
   const commandQueues = new CommandQueues(engine, logs);
   const widgets = new WidgetSandbox();
   const external = new ExternalAccess(engine, agent, logs);
   const projects = new ProjectSetup(engine, agent, discovery, workspace, logs);
   const validation = new ProjectValidation(engine, agent, logs);
   const hardware = new HardwareStore(path.join(directory, '..', 'hardware'));
+  agent.hardware = hardware;
   if (workspace.failure) logs.write({ level: 'error', category: 'workspace', message: workspace.failure });
   for (const entry of agent.sessions.values()) if (entry.agent.config.apiKey) logs.secrets.add(entry.agent.config.apiKey);
   if (agent.store.status.error || agent.restoreWarning) logs.write({ level: 'error', category: 'agent', message: agent.store.status.error || agent.restoreWarning });
@@ -78,7 +93,22 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
     }
   };
   observeDevices(); engine.on('state', observeDevices);
-  automation.on('update', () => { if (automation.job?.status !== 'running') logs.write({ category: 'test', level: automation.job?.status === 'failed' ? 'error' : 'info', message: '自动测试结束', data: automation.job }); });
+  function selectedDevice(deviceId) {
+    if (deviceId !== undefined && deviceId !== engine.activeId) throw new Error('当前设备已切换');
+    return engine.active;
+  }
+  function deviceTests(deviceId) {
+    const target = selectedDevice(deviceId);
+    if (!testRunners.has(target)) {
+      const runner = new TestRunner();
+      runner.on('update', () => {
+        const job = runner.job;
+        if (job?.finishedAt) logs.write({ category: 'test', device: job.deviceId, level: job.status === 'failed' ? 'error' : 'info', message: '自动测试结束', data: job });
+      });
+      testRunners.set(target, runner);
+    }
+    return testRunners.get(target);
+  }
   chips.on('update', () => { if (chips.job?.status !== 'running') logs.write({ category: 'flash', level: chips.job?.status === 'failed' ? 'error' : 'info', message: '烧录任务结束', data: chips.job }); });
   const sockets = new WebSocketServer({ noServer: true, maxPayload: 1024 });
   let address;
@@ -105,6 +135,12 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   });
   app.get('/api/state', (_request, response) => response.json(engine.state()));
   app.get('/api/alarms', (_request, response) => response.json(alarms.state()));
+  app.get('/api/alarms/incident/:id',async(req,res)=>res.json(await incidents.get(req.params.id)));
+  app.post('/api/tuning/apply',async(req,res)=>{instrumentScope(req.body);res.json(await tuneParameter(engine.active,req.body));});
+  app.get('/api/soak/state',async(req,res)=>res.json(await soak.state(instrumentScope(req.query))));
+  app.post('/api/soak/start',(req,res)=>res.json(soak.start(instrumentScope(req.body),engine.active,req.body.options)));
+  app.post('/api/soak/stop',(req,res)=>{soak.stop(instrumentScope(req.body),req.body.id);res.json({ok:true});});
+  app.post('/api/chips/build-plan',async(req,res)=>res.json(await buildFlashPlan(validation,chips,req.body,()=>{checkTraceScope(req.body);instrumentScope(req.body);})));
   app.get('/api/commands/queue', (_request, response) => response.json(commandQueues.state()));
   app.post('/api/commands/start', async (request, response) => response.json(await commandQueues.start(request.body)));
   app.post('/api/commands/stop', (_request, response) => response.json(commandQueues.stop()));
@@ -143,7 +179,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
     if (families.size > 1) warnings.push('USB / 启动日志与工程的芯片系列不一致，请核对设备和工程');
     response.json({ deviceId: device.id, candidates, warnings, binding: matchBinding(device.portBinding, ports).status });
   });
-  app.post('/api/devices/add', (request, response) => { const id = engine.add(request.body.name); agent.cancel(); engine.select(id); response.json(engine.state()); });
+  app.post('/api/devices/add', (request, response) => { if (agent.busy) throw new Error('请先停止 Agent 分析再切换设备'); const id = engine.add(request.body.name); agent.cancel('切换设备'); engine.select(id); response.json(engine.state()); });
   app.post('/api/devices/select', (request, response) => { if (agent.busy) throw new Error('请先停止 Agent 分析'); agent.cancel(); engine.select(request.body.id); response.json(engine.state()); });
   app.post('/api/devices/remove', async (request, response) => { if (agent.busy) throw new Error('请先停止 Agent 分析'); agent.cancel(); await engine.remove(request.body.id); response.json(engine.state()); });
   app.post('/api/devices/config', async (request, response) => {
@@ -165,27 +201,36 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.post('/api/connect', async (request, response) => { const deviceId = engine.activeId; if (request.body.deviceId && request.body.deviceId !== deviceId) throw new Error('当前设备已切换'); await discovery.checkConnection(deviceId, request.body); if (engine.activeId !== deviceId) throw new Error('当前设备已切换'); await engine.connect(request.body); response.json(engine.state()); });
   app.post('/api/disconnect', async (request, response) => { if (request.body.deviceId && request.body.deviceId !== engine.activeId) throw new Error('当前设备已切换'); await engine.disconnect(); response.json(engine.state()); });
   app.post('/api/send', async (request, response) => { if (request.body.deviceId && request.body.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json({ bytes: await engine.send(request.body) }); });
-  app.post('/api/signals', async (request, response) => { await engine.setSignals(request.body); response.json(engine.state()); });
+  app.post('/api/signals', async (request, response) => { await selectedDevice(request.body.deviceId).setSignals(request.body); response.json(engine.state()); });
   app.post('/api/timer', async (request, response) => {
     if (request.body.deviceId && request.body.deviceId !== engine.activeId) throw new Error('当前设备已切换');
     if (request.body.active) await engine.startTimedSend(request.body.payload, request.body.interval);
     else { engine.stopTimedSend(); engine.emitState(); }
     response.json(engine.state());
   });
-  app.post('/api/processing', (request, response) => { if (request.body.deviceId && request.body.deviceId !== engine.activeId) throw new Error('当前设备已切换'); engine.setProcessing(request.body); response.json(engine.state()); });
+  function processingTarget(input) {
+    const target = selectedDevice(input.deviceId);
+    if (input.root !== undefined && input.root !== (engine.devices.get(engine.activeId)?.projectRoot || '')) throw new Error('当前工程已变化');
+    return target;
+  }
+  app.get('/api/processing/script', (request, response) => {
+    const definition = processingTarget(request.query).processingDefinition;
+    response.json({ script: definition?.mode === 'script' ? definition.script : null });
+  });
+  app.post('/api/processing', (request, response) => { processingTarget(request.body).setProcessing(request.body); response.json(engine.state()); });
   app.post('/api/testing/graph', (request, response) => response.json(graphTest(request.body)));
   app.post('/api/can/analyze', (request, response) => response.json(analyzeCan(request.body)));
   app.post('/api/widgets/evaluate', async (request, response) => response.json(await widgets.run(request.body)));
-  app.post('/api/record/start', async (_request, response) => response.json({ id: await engine.startRecording() }));
-  app.post('/api/record/stop', async (_request, response) => { const id = await engine.store.stop(); engine.emitState(); response.json({ id }); });
+  app.post('/api/record/start', async (request, response) => response.json({ id: await selectedDevice(request.body?.deviceId).startRecording() }));
+  app.post('/api/record/stop', async (request, response) => { const store = selectedDevice(request.body?.deviceId).store; if (request.body?.recordingId && request.body.recordingId !== store.recording?.id) throw new Error('录制任务已变化'); const id = await store.stop(); engine.emitState(); response.json({ id }); });
   app.get('/api/sessions', async (_request, response) => { const active = new Set(engine.list().map(device => device.recording)); response.json((await engine.store.list()).map(record => ({ ...record, active: active.has(record.id) }))); });
   app.post('/api/sessions/import', async (request, response) => response.json({ id: await engine.store.import(request.body.text) }));
   app.get('/api/sessions/:id', (request, response) => {
     if (engine.list().some(device => device.recording === request.params.id)) return response.status(409).json({ error: '请先停止录制' });
     response.download(engine.store.resolve(request.params.id));
   });
-  app.post('/api/replay/load', async (request, response) => { if (engine.list().some(device => device.recording === request.body.id)) throw new Error('请先停止录制'); await engine.loadReplay(request.body.id); response.json(engine.state()); });
-  app.post('/api/replay/control', (request, response) => { engine.controlReplay(request.body); response.json(engine.state()); });
+  app.post('/api/replay/load', async (request, response) => { const target = selectedDevice(request.body.deviceId); if (engine.list().some(device => device.recording === request.body.id)) throw new Error('请先停止录制'); await target.loadReplay(request.body.id); response.json(engine.state()); });
+  app.post('/api/replay/control', (request, response) => { selectedDevice(request.body.deviceId).controlReplay(request.body); response.json(engine.state()); });
   app.post('/api/import-sscom', (request, response) => {
     if (typeof request.body.data !== 'string' || request.body.data.length > 2 * 1024 * 1024) throw new Error('指令文件过大');
     const bytes = Buffer.from(request.body.data, 'base64');
@@ -199,9 +244,13 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.post('/api/frames/validate', (request, response) => response.json(validateSchema(request.body.schema)));
   app.post('/api/modbus/inspect', (request, response) => response.json(inspectModbus(request.body.hex, request.body.direction)));
   app.get('/api/frames/latest', (_request, response) => response.json(engine.parser.lastFrame || null));
-  app.get('/api/automation', (_request, response) => response.json(automation.state()));
-  app.post('/api/automation/start', async (request, response) => { if (request.body.deviceId && request.body.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json(await automation.start(engine.active, request.body)); });
-  app.post('/api/automation/stop', (_request, response) => { automation.stop(); response.json(automation.state()); });
+  app.get('/api/automation', (request, response) => response.json(deviceTests(request.query.deviceId).state()));
+  app.post('/api/automation/start', async (request, response) => { const runner = deviceTests(request.body.deviceId); response.json(await runner.start(engine.active, request.body, engine.activeId)); });
+  app.post('/api/automation/stop', (request, response) => {
+    const runner = deviceTests(request.body?.deviceId);
+    if (request.body?.jobId && request.body.jobId !== runner.job?.id) throw new Error('测试任务已变化');
+    runner.stop(); response.json(runner.state());
+  });
   app.get('/api/chips', async (_request, response) => response.json({ images: await chips.list(), job: chips.job }));
   app.post('/api/keil/project', async (request, response) => response.json(await readKeilProject(agent.workspace.root, request.body.path)));
   app.post('/api/iar/project', async (request, response) => response.json(await readIarProject(agent.workspace.root, request.body.path)));
@@ -240,8 +289,95 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.post('/api/ai/delegate', async (request, response) => response.json(await agent.delegate(request.body)));
   app.post('/api/ai/cancel-all', (_request, response) => { agent.cancelAll(); response.json(agent.state()); });
   app.get('/api/ai/changes', async (_request, response) => response.json(await agent.workspace.history()));
-  app.get('/api/ai/changes/:id', async (request, response) => response.json(await agent.workspace.change(request.params.id)));
   const checkAgentContext = input => { if (input.deviceId && input.deviceId !== engine.activeId) throw new Error('当前设备已切换'); if (input.sessionId && input.sessionId !== agent.active.id) throw new Error('当前会话已切换'); if (input.root && input.root !== agent.workspace.root) throw new Error('当前工程已变化'); };
+  app.get('/api/ai/changes/:id', async (request, response) => {
+    checkAgentContext(request.query);
+    const change = await agent.workspace.change(request.params.id);
+    checkAgentContext(request.query);
+    response.json(change);
+  });
+  function checkTraceScope(input) {
+    if (!input?.deviceId || !input.root) throw new Error('请先绑定工程和设备');
+    checkAgentContext(input);
+  }
+  function instrumentScope(input) {
+    if (!input.deviceId || input.deviceId !== engine.activeId || input.root !== (engine.devices.get(input.deviceId)?.projectRoot || '')) throw new Error('设备或工程已切换');
+    return JSON.stringify([input.deviceId,input.root]);
+  }
+  app.post('/api/source/save', async (req,res)=>{
+    checkTraceScope(req.body); const session = agent.active, workspace = agent.workspace;
+    if (session.readOnly) throw new Error('当前会话为只读');
+    const change = await workspace.propose({...req.body,reason:'IDE 编辑器保存'}, {partialEdit:true});
+    checkTraceScope(req.body); if (session !== agent.active) throw new Error('当前会话已切换');
+    await workspace.apply(change.id); res.json({hash:change.afterHash});
+  });
+  app.post('/api/source/query',async(req,res)=>{checkTraceScope(req.body);const result=await clangQuery(agent.workspace,req.body);checkTraceScope(req.body);res.json(result);});
+  app.get('/api/bench/state',(req,res)=>res.json(bench.state(instrumentScope(req.query))));
+  app.post('/api/bench/start',(req,res)=>{
+    const scope=instrumentScope(req.body),{action,options={}}=req.body,target=engine.active;
+    if(action!=='ble.notify' || !options.wave){res.json(bench.start(scope,target,action,options));return;}
+    if(target.connected||target.busy||target.automationLock||target.flashLock||target.replay)throw new Error('请选择空闲设备标签以接收 GATT 波形');
+    const previous={...target.config};let first;
+    const job=bench.start(scope,target,action,options,r=>{
+      if(target.source!=='ble'||typeof r[2]!=='number')return;
+      first??=r[0];target.receive(Buffer.from(`${r[2]}\n`),'RX',true,r[0]-first);
+    });
+    target.config={...previous,protocol:'firewater'};target.reset();target.connected=true;target.source='ble';target.emitState();
+    const stopped=()=>{if(target.source!=='ble')bench.stop(scope,job.id);};target.on('state',stopped);
+    bench.jobs.get(scope).done.finally(async()=>{target.off('state',stopped);if(target.source==='ble'){target.config=previous;target.connected=false;target.source='none';await target.store.stop();target.emitState();}});
+    res.json(job);
+  });
+  app.post('/api/bench/dbc',async(req,res)=>res.json(await bench.decode(instrumentScope(req.body),req.body.id,req.body.dbc)));
+  app.post('/api/bench/stop',(req,res)=>res.json(bench.stop(instrumentScope(req.body),req.body.id)));
+  app.get('/api/probe/state',(req,res)=>{const scope=instrumentScope(req.query);res.json(probe.scope===scope?probe.snapshot():{state:'disconnected',log:[]});});
+  app.post('/api/probe/action',async(req,res)=>{
+    checkTraceScope(req.body);const scope=instrumentScope(req.body);
+    res.json(req.body.action==='attach'?await probe.attach(scope,req.body.root,req.body):await probe.act(scope,agent.workspace,req.body));
+  });
+  engine.on('state',()=>{const current=JSON.stringify([engine.activeId,engine.devices.get(engine.activeId)?.projectRoot || '']);if(probe.child && probe.scope!==current)probe.close();});
+  app.post('/api/lab/template', async (req,res) => res.json(await makeExample(req.body.id,examplesDirectory,path.dirname(directory))));
+  app.post('/api/lab/dbc', async (req,res) => res.json(await dbcSignals(req.body)));
+  app.post('/api/lab/dbc/replay', (req,res) => res.json(replayDbcSignal(engine,req.body)));
+  app.get('/api/lab/issues',(req,res)=>{
+    checkTraceScope(req.query);
+    res.json(boardIssues.get(JSON.stringify([req.query.deviceId,req.query.root])) || null);
+  });
+  app.get('/api/lab/files',async(req,res)=>{checkTraceScope(req.query);const files=await projectLabFiles(agent.workspace.root);checkTraceScope(req.query);res.json(files);});
+  for (const [name, run] of Object.entries({size:compareFirmware,rules:checkBoardRules,bus:decodeCapture})) {
+    app.post(`/api/lab/${name}`, async (req,res) => {
+      checkTraceScope(req.body);
+      const result = await run(agent.workspace.root,req.body);
+      checkTraceScope(req.body);
+      if(name==='rules') {
+        const key=JSON.stringify([req.body.deviceId,req.body.root]); boardIssues.delete(key);
+        boardIssues.set(key,{...result,rows:result.rows.slice(0,500),at:new Date().toISOString()});
+        if(boardIssues.size>20) boardIssues.delete(boardIssues.keys().next().value);
+      }
+      res.json(result);
+    });
+  }
+  app.get('/api/lab/matrix', (req,res) => res.json(matrix.job));
+  app.post('/api/lab/matrix/start', (req,res) => res.json(matrix.start(engine,req.body)));
+  app.post('/api/lab/matrix/stop', (req,res) => {matrix.stop();res.json(matrix.job);});
+  app.get('/api/debug/artifacts', async (request, response) => {
+    checkTraceScope(request.query);
+    const paths = await traceArtifacts(agent.workspace.root);
+    checkTraceScope(request.query);
+    response.json({ paths });
+  });
+  app.post('/api/debug/backtrace', async (request, response) => {
+    checkTraceScope(request.body);
+    const result = await symbolizeCrash(agent.workspace, agent.config, request.body);
+    checkTraceScope(request.body);
+    response.json(result);
+  });
+  app.post('/api/project/search', async (request, response) => {
+    const scope = request.body;
+    if (!scope.deviceId || !scope.root) throw new Error('需要当前设备和工程目录');
+    checkAgentContext(scope);
+    const result = await agent.workspace.search(scope.query);
+    checkAgentContext(scope); response.json(result);
+  });
   app.get('/api/hardware', async (request, response) => {
     checkAgentContext(request.query); const projectRoot = agent.workspace.root, deviceId = engine.activeId;
     const [profile, files] = await Promise.all([hardware.load(projectRoot, deviceId), listHardwareFiles(projectRoot)]);
@@ -277,19 +413,30 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   app.post('/api/ai/models', async (request, response) => { checkAgentContext(request.body); response.json(await agent.models()); });
   app.get('/api/ai/files', async (request, response) => { if (request.query.deviceId && request.query.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json(await agent.workspace.list()); });
   app.get('/api/ai/file', async (request, response) => { if (request.query.deviceId && request.query.deviceId !== engine.activeId) throw new Error('当前设备已切换'); response.json(await agent.workspace.read(request.query.path)); });
-  app.post('/api/ai/run', async (request, response) => { checkAgentContext(request.body); await agent.run(request.body); response.json(agent.state()); });
+  function exactAgent(input) { if (!input?.sessionId || !input.deviceId || !input.root) throw new Error('缺少工程、设备或会话'); checkAgentContext(input); return agent.active.agent; }
+  app.post('/api/ai/prompt/draft', async (request, response) => response.json(await draftProjectPrompt(exactAgent(request.body), request.body.message)));
+  app.post('/api/ai/project/reply', (request, response) => { const service = exactAgent(request.body); if (!service.projectRun) throw new Error('当前没有项目交互'); service.projectRun.reply(request.body); response.json({ ok: true }); });
+  app.post('/api/ai/run', async (request, response) => {
+    if (request.body.agentMode === 'project') {
+      const service = exactAgent(request.body); if (service.busy) throw new Error('已有分析正在进行');
+      const job = service.run(request.body); if (!service.busy) await job;
+      // Human review can outlive an HTTP connection. State and errors arrive over the existing stream.
+      void job.catch(() => {}); return response.status(202).json({ started: true });
+    }
+    checkAgentContext(request.body); await agent.run(request.body); response.json(agent.state());
+  });
   app.post('/api/ai/resume', async (request, response) => {
     if (!request.body.deviceId || !request.body.sessionId || !request.body.root) throw new Error('继续任务缺少设备、会话或工程上下文');
     checkAgentContext(request.body); await agent.resume(request.body); response.json(agent.state());
   });
   app.post('/api/ai/retry', async (_request, response) => { await agent.retry(); response.json(agent.state()); });
-  app.post('/api/ai/cancel', (_request, response) => { agent.cancel(); agent.changed(); response.json(agent.state()); });
+  app.post('/api/ai/cancel', (request, response) => { checkAgentContext(request.body || {}); agent.cancel(); agent.changed(); response.json(agent.state()); });
   app.post('/api/ai/clear', (_request, response) => { agent.clear(); response.json(agent.state()); });
   app.post('/api/ai/context/reset', (request, response) => { checkAgentContext(request.body); agent.resetContext(); response.json(agent.state()); });
   app.post('/api/ai/plan/clear', (request, response) => { checkAgentContext(request.body); if (agent.busy) throw new Error('请先停止分析'); agent.active.agent.taskPlan = []; agent.changed(); response.json(agent.state()); });
   app.post('/api/ai/continuous', (request, response) => { if (request.body.active) agent.startContinuous(request.body); else { agent.stopContinuous(); agent.changed(); } response.json(agent.state()); });
-  app.post('/api/ai/execute', async (request, response) => { await agent.execute(request.body.id); response.json(agent.state()); });
-  app.post('/api/ai/reject', async (request, response) => { await agent.reject(request.body.id); response.json(agent.state()); });
+  app.post('/api/ai/execute', async (request, response) => { checkAgentContext(request.body); if (agent.projectRun) throw new Error('请在项目授权栏处理操作'); await agent.execute(request.body.id); response.json(agent.state()); });
+  app.post('/api/ai/reject', async (request, response) => { checkAgentContext(request.body); if (agent.projectRun) throw new Error('请在项目授权栏处理操作'); await agent.reject(request.body.id); response.json(agent.state()); });
   app.post('/api/ai/build', async (request, response) => { checkAgentContext(request.body); if (agent.active.readOnly) throw new Error('子代理会话不可执行工具链命令'); response.json(await agent.builder.start(agent.config, agent.workspace.root)); });
   app.post('/api/ai/build/cancel', (_request, response) => { agent.builder.stop(); response.json(agent.state()); });
 
@@ -302,7 +449,8 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
       client.send(message);
     }
   };
-  engine.on('state', state => broadcast({ type: 'state', state }));
+  // Project binding listeners may complete the new device's metadata during the same event.
+  engine.on('state', () => broadcast({ type: 'state', state: engine.state() }));
   discovery.on('change', state => {
     broadcast({ type: 'ports', state });
     if (state.error) logs.write({ category: 'connection', level: 'error', message: `串口检测失败：${state.error}` });
@@ -310,7 +458,8 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
     for (const port of state.removed) logs.write({ category: 'connection', message: `串口已移除 ${port.path}`, data: { path: port.path } });
   });
   alarms.on('alarm', event => broadcast({ type: 'alarm', event }));
-  agent.on('state', state => broadcast({ type: 'ai', state }));
+  let aiDirty = false;
+  agent.on('state', () => { aiDirty = true; });
   engine.on('notice', notice => broadcast({ type: 'notice', ...notice }));
   engine.on('reset', () => { samples = []; packets = []; recent = []; recentPackets = []; broadcast({ type: 'reset' }); });
   engine.on('samples', values => {
@@ -323,6 +472,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   });
   let tick = 0;
   const flush = setInterval(() => {
+    if (aiDirty) { aiDirty = false; if (sockets.clients.size) broadcast({ type: 'ai', state: agent.state() }); }
     if (pendingDropped) { engine.active.dropped += pendingDropped; pendingDropped = 0; }
     if (samples.length || packets.length) {
       recent = recent.concat(samples).slice(-2000); recentPackets = recentPackets.concat(packets).slice(-30);
@@ -339,7 +489,7 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
     socket.send(JSON.stringify({ type: 'ports', state: { ...discovery.snapshot, added: [], removed: [] } }));
     socket.send(JSON.stringify({ type: 'batch', samples: recent, packets: recentPackets }));
     socket.send(JSON.stringify({ type: 'ai', state: agent.state() }));
-    socket.on('close', () => { if (sockets.clients.size === 0) { agent.cancelAll(); agent.changed(); } });
+    // Connections are subscribers. Reloads and transport backpressure must not cancel a project.
   });
 
   let vite;
@@ -373,9 +523,17 @@ export async function startServer({ port = 4780, dev = false, autoDemo = false, 
   console.log(`SignalDesk running at ${address}`);
   let closing;
   const close = () => closing ||= (async () => {
+    matrix.stop(); await matrix.completion;
+    const httpClosed = new Promise(resolve => server.close(resolve));
     await discovery.dispose();
-    clearInterval(flush); alarms.dispose(); await agent.shutdown(); automation.stop(); chips.stop(); await widgets.dispose(); await commandQueues.dispose(); await engine.dispose(); await automation.completion; for (const client of sockets.clients) client.terminate();
-    sockets.close(); await vite?.close(); await new Promise(resolve => server.close(resolve)); await validation.dispose(); await logs.queue; await workspace.queue;
+    const runners = [...engine.devices.values()].map(entry => testRunners.get(entry.engine)).filter(Boolean);
+    for (const runner of runners) runner.stop();
+    await Promise.allSettled(runners.map(runner => runner.completion));
+    clearInterval(flush); probe.close(); await soak.close(); await incidents.dispose(); await bench.dispose(); alarms.dispose(); await agent.shutdown(); chips.stop(); await chips.handshaking; await widgets.dispose(); await commandQueues.dispose(); await engine.dispose(); for (const client of sockets.clients) client.terminate();
+    sockets.close(); await vite?.close();
+    // A browser can preconnect without sending any headers. Such sockets survive server.close().
+    server.closeAllConnections();
+    await httpClosed; await validation.dispose(); await logs.queue; await workspace.queue;
   })();
   return { address, close, engine, discovery };
 }

@@ -73,7 +73,7 @@ export class AlarmService extends EventEmitter {
   observe(device) {
     const engine = device.engine, monitor = new AlarmMonitor(device.alarmRules || [], event => this.record(device, event));
     let connected = engine.connected;
-    const samples = values => { if (engine.connected) monitor.samples(values); };
+    const samples = values => { if (engine.connected || (engine.source==='replay' && engine.replay?.channelName)) monitor.samples(values); };
     const reset = () => monitor.reset();
     const state = () => { if (connected !== engine.connected) { connected = engine.connected; monitor.reset(); } };
     const notice = event => { if (connected && !engine.connected && event.level === 'error') monitor.disconnected(); };

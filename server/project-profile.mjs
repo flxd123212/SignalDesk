@@ -96,7 +96,7 @@ export async function scanProject(input) {
     targets.push({ ...target, ...identity, id, root: base, entryFile, name: scalar(manifest.name) || path.basename(base),
       serial: { baudRate, sampleRate, protocol, dataBits: serial.dataBits ?? 8, stopBits: serial.stopBits ?? 1, parity: serial.parity ?? 'none', ...(serial.schema ? { schema: serial.schema } : {}) },
       portHint: scalar(serial.port) || target.portHint || '',
-      toolchain: { ...target.toolchain, ...(target.kind === 'arduino' && typeof manifest.fqbn === 'string' ? { fqbn: manifest.fqbn } : {}) },
+      toolchain: { ...target.toolchain, ...(target.kind === 'cmake' && manifest.cmakeGenerator === 'Ninja' ? {cmakeGenerator:'Ninja'} : {}), ...(target.kind === 'arduino' && typeof manifest.fqbn === 'string' ? { fqbn: manifest.fqbn } : {}) },
       evidence: [...(target.evidence || []), ...hints.evidence, ...(manifestText ? ['signaldesk.json: 显式项目设置'] : []), `数据格式: ${serial.protocol ? '项目设置' : hints.protocol ? '源码线索' : '未识别，保留原始字节'}`, `采样率: ${serial.sampleRate ? '项目设置' : hints.sampleRate ? '源码周期线索' : '默认值，需核对真实发送周期'}`],
       warnings: [...(target.warnings || []), ...hints.conflicts],
     });

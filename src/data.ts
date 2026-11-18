@@ -41,7 +41,7 @@ export const showDeviceDiscovery = () => window.dispatchEvent(new CustomEvent('s
 export async function api<T = AppState>(url: string, body?: unknown): Promise<T> {
   const response = await fetch(`/api${url}`, body === undefined ? undefined : { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
   const data = await response.json();
-  if (!response.ok) throw new Error(data.error || '请求失败');
+  if (!response.ok) throw Object.assign(new Error(data.error || '请求失败'), { status: response.status });
   return data;
 }
 

@@ -30,6 +30,7 @@ export class AgentRegistry extends EventEmitter {
     const entry = this.hub.devices.get(device), root = entry.projectRoot || this.defaultRoot;
     const agent = new AgentService(entry.engine, root, { historyDirectory: this.historyDirectory }); agent.readOnly = readOnly;
     agent.storageStatus = () => this.store?.status || null;
+    agent.hardwareProfile = () => this.hardware?.load(agent.workspace.root, device);
     agent.config = { ...agent.config, ...this.toolDefaults, ...entry.toolchainConfig };
     if (existing.length) agent.config = { ...existing[0].agent.config };
     this.sessions.set(id, { id, device, name: String(name).slice(0, 40), parent, readOnly, external, agent });
@@ -141,6 +142,6 @@ export class AgentRegistry extends EventEmitter {
     }));
     this.changed(); return this.state();
   }
-  cancelAll() { for (const entry of this.sessions.values()) entry.agent.cancel(); }
+  cancelAll() { for (const entry of this.sessions.values()) entry.agent.cancel('收到停止全部 Agent 的请求'); }
   dispose() { for (const entry of this.sessions.values()) entry.agent.dispose(); }
 }

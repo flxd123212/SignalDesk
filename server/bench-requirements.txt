@@ -1,0 +1,8 @@
+bleak>=1,<4
+python-can>=4.6,<5
+PyVISA>=1.14,<2
+PyVISA-py>=0.8,<1
+PyUSB>=1.2,<2
+pyjoulescope_driver>=2,<3
+cantools>=40,<46
+pyelftools>=0.32,<1
